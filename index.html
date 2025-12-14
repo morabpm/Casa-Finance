@@ -4,42 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Casa Finance Pro</title>
-    <!-- Tailwind CSS via CDN para garantir que o estilo carregue em qualquer ambiente -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            colors: {
-              brand: {
-                50: '#eff6ff',
-                100: '#dbeafe',
-                500: '#3b82f6',
-                600: '#2563eb',
-                700: '#1d4ed8',
-                900: '#1e3a8a',
-              }
-            }
-          }
-        }
-      }
-    </script>
-    <style>
-      body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
-      /* Custom scrollbar */
-      ::-webkit-scrollbar { width: 8px; height: 8px; }
-      ::-webkit-scrollbar-track { background: transparent; }
-      ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-      .dark ::-webkit-scrollbar-thumb { background: #475569; }
-      ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-    </style>
+    
+    <!-- Fonte Inter Oficial do Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- O CSS será injetado automaticamente pelo Vite durante o build -->
   <script type="importmap">
 {
   "imports": {
-    "react/": "https://esm.sh/react@^19.2.3/",
     "react": "https://esm.sh/react@^19.2.3",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
     "lucide-react": "https://esm.sh/lucide-react@^0.561.0",
     "recharts": "https://esm.sh/recharts@^3.5.1",
     "react-router-dom": "https://esm.sh/react-router-dom@^7.10.1",
@@ -49,8 +26,9 @@
 }
 </script>
 </head>
-  <body class="bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100 transition-colors duration-200">
+  <body class="bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100 transition-colors duration-200 antialiased">
     <div id="root"></div>
+    <!-- Entry point do App -->
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
