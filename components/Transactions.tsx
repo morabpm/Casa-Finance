@@ -67,7 +67,7 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const files = Array.from(e.target.files);
+      const files: File[] = Array.from(e.target.files);
       const MAX_SIZE = 1024 * 1024; // 1MB
 
       const validFiles = files.filter(file => {
