@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Search, Paperclip, X, FileText, Download, Copy, Repeat, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Transaction, Category, TransactionType, TransactionStatus, Attachment } from '../types';
-import { formatDate, formatCurrency, generateId, getMonthName } from '../utils';
+import { Plus, Edit2, Trash2, Search, Paperclip, X, FileText, Download, Copy, Repeat, ChevronLeft, ChevronRight, LayoutList, LayoutGrid, Truck, StickyNote } from 'lucide-react';
+import { Transaction, Category, TransactionType, TransactionStatus, Attachment, Supplier } from '../types';
+import { formatDate, formatCurrency, getMonthName } from '../utils';
 import { Modal } from './ui/Modal';
 import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
@@ -9,12 +9,13 @@ import { useToast } from '../context/ToastContext';
 interface TransactionsProps {
   transactions: Transaction[];
   categories: Category[];
+  suppliers: Supplier[];
   onAdd: (t: Transaction) => void;
   onEdit: (t: Transaction) => void;
   onDelete: (id: string) => void;
 }
 
-export const Transactions: React.FC<TransactionsProps> = ({ transactions, categories, onAdd, onEdit, onDelete }) => {
+export const Transactions: React.FC<TransactionsProps> = ({ transactions, categories, suppliers, onAdd, onEdit, onDelete }) => {
   const currentMonth = new Date().getMonth();
   const currentYear = new Date().getFullYear();
 
@@ -24,6 +25,7 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
   const [filterYear, setFilterYear] = useState(currentYear);
   const [filterStatus, setFilterStatus] = useState<TransactionStatus | 'TODOS'>('TODOS');
   const [filterCategory, setFilterCategory] = useState<string>('');
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
@@ -43,7 +45,9 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
     category: '',
     type: 'DESPESA',
     status: 'REALIZADO',
-    attachments: []
+    attachments: [],
+    notes: '',
+    supplierId: ''
   });
   
   // Recurring State
@@ -122,7 +126,9 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
         category: categories[0]?.id || '',
         type: 'DESPESA',
         status: 'REALIZADO',
-        attachments: []
+        attachments: [],
+        notes: '',
+        supplierId: ''
       });
     }
     setIsModalOpen(true);
@@ -138,13 +144,14 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
       const baseTransaction = { ...formData };
       
       if (isRecurring && recurringCount > 1) {
+        const baseDate = new Date((baseTransaction.date as string) + 'T12:00:00');
         for (let i = 0; i < recurringCount; i++) {
-          const newDate = new Date(baseTransaction.date as string);
-          newDate.setMonth(newDate.getMonth() + i);
+          const newDate = new Date(baseDate);
+          newDate.setMonth(baseDate.getMonth() + i);
           
           const t: Transaction = {
             ...(baseTransaction as Transaction),
-            id: generateId(),
+            id: crypto.randomUUID(),
             date: newDate.toISOString().split('T')[0],
             status: i === 0 ? (baseTransaction.status as TransactionStatus) : 'PLANEJADO'
           };
@@ -152,7 +159,7 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
         }
         showToast(`${recurringCount} transações adicionadas.`, 'success');
       } else {
-        onAdd({ ...formData, id: generateId() } as Transaction);
+        onAdd({ ...formData, id: crypto.randomUUID() } as Transaction);
         showToast('Transação adicionada.', 'success');
       }
     }
@@ -227,6 +234,7 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
 
   // Helper to get category color/name
   const getCatDetails = (id: string) => categories.find(c => c.id === id) || { name: 'Unknown', color: '#9ca3af' };
+  const getSupplierName = (id?: string) => suppliers.find(s => s.id === id)?.name;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -260,6 +268,23 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
           >
             <Plus size={18} /> <span className="hidden sm:inline">Novo</span>
           </button>
+          
+          <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-md ml-2">
+            <button 
+              onClick={() => setViewMode('table')}
+              className={`p-1.5 rounded text-sm transition-colors ${viewMode === 'table' ? 'bg-white dark:bg-gray-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+              title="Modo Tabela"
+            >
+              <LayoutList size={16} />
+            </button>
+            <button 
+              onClick={() => setViewMode('cards')}
+              className={`p-1.5 rounded text-sm transition-colors ${viewMode === 'cards' ? 'bg-white dark:bg-gray-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+              title="Modo Cards"
+            >
+              <LayoutGrid size={16} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -321,71 +346,158 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
         </div>
       </div>
 
-      {/* Table */}
+      {/* List View (Table or Cards) */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden border border-gray-200 dark:border-gray-700">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-300">
-              <tr>
-                <th className="px-6 py-3">Data</th>
-                <th className="px-6 py-3">Descrição</th>
-                <th className="px-6 py-3">Categoria</th>
-                <th className="px-6 py-3">Status</th>
-                <th className="px-6 py-3">Valor</th>
-                <th className="px-6 py-3 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {paginatedTransactions.length === 0 ? (
+        {viewMode === 'table' ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-300">
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
-                    Nenhum lançamento encontrado.
-                  </td>
+                  <th className="px-6 py-3">Data</th>
+                  <th className="px-6 py-3">Descrição</th>
+                  <th className="px-6 py-3">Fornecedor</th>
+                  <th className="px-6 py-3">Categoria</th>
+                  <th className="px-6 py-3">Status</th>
+                  <th className="px-6 py-3">Valor</th>
+                  <th className="px-6 py-3 text-right">Ações</th>
                 </tr>
-              ) : (
-                paginatedTransactions.map(t => {
-                  const cat = getCatDetails(t.category);
-                  return (
-                    <tr key={t.id} className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                      <td className="px-6 py-4 text-gray-600 dark:text-gray-300 whitespace-nowrap">{formatDate(t.date)}</td>
-                      <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate max-w-[200px]" title={t.description}>{t.description}</span>
-                          {t.attachments && t.attachments.length > 0 && (
-                            <div className="flex items-center text-gray-400 dark:text-gray-500" title={`${t.attachments.length} arquivo(s) anexado(s)`}>
-                               <Paperclip size={14} />
-                               {t.attachments.length > 1 && <span className="text-[10px] font-bold ml-0.5">{t.attachments.length}</span>}
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {paginatedTransactions.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                      Nenhum lançamento encontrado.
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedTransactions.map(t => {
+                    const cat = getCatDetails(t.category);
+                    const supplierName = getSupplierName(t.supplierId);
+                    return (
+                      <tr key={t.id} className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                        <td className="px-6 py-4 text-gray-600 dark:text-gray-300 whitespace-nowrap">{formatDate(t.date)}</td>
+                        <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate max-w-[200px]" title={t.description}>{t.description}</span>
+                            {t.notes && (
+                              <StickyNote size={14} className="text-gray-400" title={t.notes} />
+                            )}
+                            {t.attachments && t.attachments.length > 0 && (
+                              <div className="flex items-center text-gray-400 dark:text-gray-500" title={`${t.attachments.length} arquivo(s) anexado(s)`}>
+                                 <Paperclip size={14} />
+                                 {t.attachments.length > 1 && <span className="text-[10px] font-bold ml-0.5">{t.attachments.length}</span>}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-gray-600 dark:text-gray-400">
+                          {supplierName ? (
+                            <div className="flex items-center gap-1" title={supplierName}>
+                              <Truck size={14} />
+                              <span className="truncate max-w-[100px] text-xs">{supplierName}</span>
                             </div>
+                          ) : (
+                            <span className="text-gray-400 text-xs">-</span>
                           )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span 
+                            className="px-2 py-1 rounded-full text-xs font-semibold"
+                            style={{ backgroundColor: `${cat.color}20`, color: cat.color }}
+                          >
+                            {cat.name}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2 py-1 rounded-full text-xs ${
+                            t.status === 'REALIZADO' 
+                              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                              : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                          }`}>
+                            {t.status === 'REALIZADO' ? 'Realizado' : 'Planejado'}
+                          </span>
+                        </td>
+                        <td className={`px-6 py-4 font-bold ${t.type === 'RECEITA' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {t.type === 'RECEITA' ? '+' : '-'} {formatCurrency(t.amount)}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex justify-end gap-2">
+                            <button onClick={() => handleOpenModal(t, true)} className="text-gray-500 hover:text-brand-600 p-1" title="Duplicar">
+                              <Copy size={16} />
+                            </button>
+                            <button onClick={() => handleOpenModal(t)} className="text-blue-500 hover:text-blue-700 p-1" title="Editar">
+                              <Edit2 size={16} />
+                            </button>
+                            <button onClick={() => confirm({
+                              message: 'Tem certeza que deseja excluir este lançamento?',
+                              onConfirm: () => {
+                                onDelete(t.id);
+                                showToast('Lançamento excluído com sucesso.', 'success');
+                              }
+                            })} className="text-red-500 hover:text-red-700 p-1" title="Excluir">
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 dark:bg-gray-800/50">
+            {paginatedTransactions.length === 0 ? (
+              <div className="col-span-1 sm:col-span-2 py-8 text-center text-gray-500">
+                Nenhum lançamento encontrado.
+              </div>
+            ) : (
+              paginatedTransactions.map(t => {
+                const cat = getCatDetails(t.category);
+                const supplierName = getSupplierName(t.supplierId);
+                return (
+                  <div key={t.id} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col gap-3">
+                    <div className="flex justify-between items-start">
+                      <div className="flex flex-col">
+                        <span className="text-xs text-gray-500 dark:text-gray-400 mb-1">{formatDate(t.date)}</span>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-gray-900 dark:text-white line-clamp-2">{t.description}</h3>
+                          {t.notes && <StickyNote size={14} className="text-gray-400 shrink-0" title={t.notes} />}
                         </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span 
-                          className="px-2 py-1 rounded-full text-xs font-semibold"
-                          style={{ backgroundColor: `${cat.color}20`, color: cat.color }}
-                        >
-                          {cat.name}
+                        {supplierName && (
+                          <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 mt-1" title={supplierName}>
+                            <Truck size={12} />
+                            <span className="truncate">{supplierName}</span>
+                          </div>
+                        )}
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-xs ${
+                        t.status === 'REALIZADO' 
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                          : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                      }`}>
+                        {t.status === 'REALIZADO' ? 'Realizado' : 'Planejado'}
+                      </span>
+                    </div>
+                    
+                    <div className="flex justify-between items-end mt-auto pt-2 border-t border-gray-100 dark:border-gray-700">
+                      <span 
+                        className="px-2 py-1 rounded-full text-xs font-semibold"
+                        style={{ backgroundColor: `${cat.color}20`, color: cat.color }}
+                      >
+                        {cat.name}
+                      </span>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={`font-bold ${t.type === 'RECEITA' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {t.type === 'RECEITA' ? '+' : '-'} {formatCurrency(t.amount)}
                         </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded-full text-xs ${
-                          t.status === 'REALIZADO' 
-                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                            : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                        }`}>
-                          {t.status === 'REALIZADO' ? 'Realizado' : 'Planejado'}
-                        </span>
-                      </td>
-                      <td className={`px-6 py-4 font-bold ${t.type === 'RECEITA' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {t.type === 'RECEITA' ? '+' : '-'} {formatCurrency(t.amount)}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end gap-2">
-                          <button onClick={() => handleOpenModal(t, true)} className="text-gray-500 hover:text-brand-600 p-1" title="Duplicar">
-                            <Copy size={16} />
+                        <div className="flex justify-end gap-1">
+                          <button onClick={() => handleOpenModal(t, true)} className="text-gray-400 hover:text-brand-600 p-1" title="Duplicar">
+                            <Copy size={14} />
                           </button>
-                          <button onClick={() => handleOpenModal(t)} className="text-blue-500 hover:text-blue-700 p-1" title="Editar">
-                            <Edit2 size={16} />
+                          <button onClick={() => handleOpenModal(t)} className="text-gray-400 hover:text-blue-600 p-1" title="Editar">
+                            <Edit2 size={14} />
                           </button>
                           <button onClick={() => confirm({
                             message: 'Tem certeza que deseja excluir este lançamento?',
@@ -393,18 +505,18 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
                               onDelete(t.id);
                               showToast('Lançamento excluído com sucesso.', 'success');
                             }
-                          })} className="text-red-500 hover:text-red-700 p-1" title="Excluir">
-                            <Trash2 size={16} />
+                          })} className="text-gray-400 hover:text-red-600 p-1" title="Excluir">
+                            <Trash2 size={14} />
                           </button>
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
         
         {/* Pagination Controls */}
         {totalPages > 1 && (
@@ -504,6 +616,41 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
                 <option value="PLANEJADO">Planejado</option>
               </select>
             </div>
+          </div>
+          
+          {formData.type === 'DESPESA' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fornecedor (Opcional)</label>
+              <select 
+                className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2 text-sm dark:text-white"
+                value={formData.supplierId || ''}
+                onChange={e => {
+                  const supplierId = e.target.value;
+                  const updates: Partial<Transaction> = { supplierId };
+                  const sup = suppliers.find(s => s.id === supplierId);
+                  if (sup && !formData.description) {
+                    updates.description = sup.name;
+                  }
+                  setFormData(prev => ({ ...prev, ...updates }));
+                }}
+              >
+                <option value="">Nenhum</option>
+                {suppliers.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Observações (Opcional)</label>
+            <textarea 
+              rows={3}
+              className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2 text-sm dark:text-white resize-none"
+              placeholder="Adicione notas adicionais aqui..."
+              value={formData.notes || ''}
+              onChange={e => setFormData({...formData, notes: e.target.value})}
+            />
           </div>
 
           {/* Recurring Option (Only for new transactions) */}

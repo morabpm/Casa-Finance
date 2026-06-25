@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Download, Upload, Save, FileJson, User, Database, Check, FileText } from 'lucide-react';
+import { Download, Upload, Save, FileJson, User, Database, Check, FileText, History, Plus, Edit2, Trash2 } from 'lucide-react';
 import { AppData, UserProfile } from '../types';
 import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
+import { migrateData } from '../utils';
 
 interface SettingsProps {
   data: AppData;
@@ -11,21 +12,21 @@ interface SettingsProps {
 }
 
 export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProfile }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'data'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'data' | 'history'>('profile');
   const [profileForm, setProfileForm] = useState<UserProfile>(data.userProfile || {
     name: '', email: '', role: '', companyName: ''
   });
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [historyPage, setHistoryPage] = useState(0);
   
   const { confirm } = useConfirm();
   const { showToast } = useToast();
 
   const handleExport = () => {
-    // Ensure we export the current state fully
     const exportData = {
       ...data,
-      version: '1.0',
+      version: '2.0',
       exportedAt: new Date().toISOString()
     };
     
@@ -75,21 +76,18 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
         try {
           if (event.target?.result) {
             const parsed = JSON.parse(event.target.result as string);
-            // Basic validation
-            if (parsed.transactions && parsed.categories) {
-              confirm({
-                message: "Isso substituirá TODOS os dados atuais (transações, categorias, fornecedores, etc). Continuar?",
-                onConfirm: () => {
-                  onImport(parsed);
-                  if (parsed.userProfile) {
-                    setProfileForm(parsed.userProfile);
-                  }
-                  showToast("Backup restaurado com sucesso!", "success");
+            const migrated = migrateData(parsed);
+            
+            confirm({
+              message: "Isso substituirá TODOS os dados atuais (transações, categorias, fornecedores, etc). Continuar?",
+              onConfirm: () => {
+                onImport(migrated);
+                if (migrated.userProfile) {
+                  setProfileForm(migrated.userProfile);
                 }
-              });
-            } else {
-              showToast("Arquivo inválido. Verifique se é um backup do Casa Finance Pro.", "error");
-            }
+                showToast("Backup restaurado com sucesso!", "success");
+              }
+            });
           }
         } catch (err) {
           showToast("Erro ao ler o arquivo. O JSON pode estar corrompido.", "error");
@@ -107,32 +105,63 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
     setProfileError(null);
     onUpdateProfile(profileForm);
     setSaveStatus('saved');
-    showToast('Perfil atualizado com sucesso!', 'success');
+    showToast('Perfil atualizado!', 'success');
     setTimeout(() => setSaveStatus('idle'), 3000);
   };
+
+  const handleClearHistory = () => {
+    confirm({
+      message: "Tem certeza que deseja apagar todo o histórico de atividades?",
+      onConfirm: () => {
+        onImport({ ...data, activityLog: [] });
+        showToast('Histórico apagado', 'info');
+      }
+    });
+  };
+
+  const getLogIcon = (action: string) => {
+    switch (action) {
+      case 'CREATE': return <Plus size={18} className="text-emerald-500" />;
+      case 'EDIT': return <Edit2 size={18} className="text-blue-500" />;
+      case 'DELETE': return <Trash2 size={18} className="text-rose-500" />;
+      default: return <History size={18} className="text-gray-500" />;
+    }
+  };
+
+  // Pagination for history
+  const historyPerPage = 20;
+  const sortedHistory = [...(data.activityLog || [])].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  const totalPages = Math.ceil(sortedHistory.length / historyPerPage);
+  const currentHistory = sortedHistory.slice(historyPage * historyPerPage, (historyPage + 1) * historyPerPage);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
          <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Configurações</h2>
          
-         <div className="flex p-1 bg-gray-200 dark:bg-gray-700 rounded-lg">
+         <div className="flex p-1 bg-gray-200 dark:bg-gray-700 rounded-lg overflow-x-auto max-w-full">
            <button 
              onClick={() => setActiveTab('profile')}
-             className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'profile' ? 'bg-white dark:bg-gray-600 shadow-sm text-brand-600 dark:text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}
+             className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'profile' ? 'bg-white dark:bg-gray-600 shadow-sm text-brand-600 dark:text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}
            >
              <User size={16} /> Perfil
            </button>
            <button 
              onClick={() => setActiveTab('data')}
-             className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'data' ? 'bg-white dark:bg-gray-600 shadow-sm text-brand-600 dark:text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}
+             className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'data' ? 'bg-white dark:bg-gray-600 shadow-sm text-brand-600 dark:text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}
            >
              <Database size={16} /> Dados & Backup
+           </button>
+           <button 
+             onClick={() => setActiveTab('history')}
+             className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'history' ? 'bg-white dark:bg-gray-600 shadow-sm text-brand-600 dark:text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}
+           >
+             <History size={16} /> Histórico
            </button>
          </div>
       </div>
       
-      {activeTab === 'profile' ? (
+      {activeTab === 'profile' && (
         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 animate-in slide-in-from-left-4 duration-300">
           <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Perfil do Operador</h3>
           <form onSubmit={handleProfileSubmit} className="space-y-4 max-w-lg">
@@ -198,8 +227,10 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
              </div>
           </form>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in slide-in-from-right-4 duration-300">
+      )}
+
+      {activeTab === 'data' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-300">
           {/* Export Card */}
           <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
             <div className="flex items-center gap-3 mb-4 text-brand-600 dark:text-brand-400">
@@ -211,10 +242,11 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
             </p>
             
             <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-md mb-6 text-xs text-gray-500 font-mono">
-              {data.transactions.length} transações<br/>
-              {data.categories.length} categorias<br/>
+              {data.transactions?.length || 0} transações<br/>
+              {data.categories?.length || 0} categorias<br/>
               {data.suppliers?.length || 0} fornecedores<br/>
-              {data.budgets.length} orçamentos
+              {data.budgets?.length || 0} orçamentos<br/>
+              {data.goals?.length || 0} metas
             </div>
 
             <div className="flex flex-col gap-3">
@@ -257,6 +289,71 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
                </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'history' && (
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 animate-in slide-in-from-right-4 duration-300">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Histórico de Atividades</h3>
+            {sortedHistory.length > 0 && (
+              <button 
+                onClick={handleClearHistory}
+                className="text-sm text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300 flex items-center gap-1 transition-colors"
+              >
+                <Trash2 size={16} /> Limpar Histórico
+              </button>
+            )}
+          </div>
+
+          {sortedHistory.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="w-16 h-16 bg-gray-50 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                <History size={40} className="text-gray-400" />
+              </div>
+              <p className="text-gray-500 dark:text-gray-400 font-medium">Nenhuma atividade registrada</p>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-4">
+                {currentHistory.map((log) => (
+                  <div key={log.id} className="flex items-start gap-4 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                    <div className="mt-1 bg-white dark:bg-gray-800 p-1.5 rounded-full shadow-sm border border-gray-100 dark:border-gray-700">
+                      {getLogIcon(log.action)}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-800 dark:text-gray-200">{log.description}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(log.timestamp))}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-100 dark:border-gray-700">
+                  <button 
+                    onClick={() => setHistoryPage(p => Math.max(0, p - 1))}
+                    disabled={historyPage === 0}
+                    className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                  >
+                    Anterior
+                  </button>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    Página {historyPage + 1} de {totalPages}
+                  </span>
+                  <button 
+                    onClick={() => setHistoryPage(p => Math.min(totalPages - 1, p + 1))}
+                    disabled={historyPage === totalPages - 1}
+                    className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                  >
+                    Próxima
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>

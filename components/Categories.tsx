@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Tag, Edit2 } from 'lucide-react';
 import { Category, TransactionType, Transaction, Budget } from '../types';
-import { generateId } from '../utils';
 import { Modal } from './ui/Modal';
 import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
@@ -65,7 +64,7 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, transactions
     } else {
       onAdd({ 
         ...formData as Category, 
-        id: generateId() 
+        id: crypto.randomUUID() 
       });
       showToast('Categoria salva com sucesso.', 'success');
     }
@@ -85,31 +84,70 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, transactions
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {categories.map(cat => (
-          <div key={cat.id} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border-l-4 border-gray-200 dark:border-gray-700 relative group" style={{ borderLeftColor: cat.color }}>
-            <div className="flex justify-between items-start">
-              <div className="flex items-center gap-2">
-                <Tag size={16} style={{ color: cat.color }} />
-                <h3 className="font-semibold text-gray-900 dark:text-white">{cat.name}</h3>
+      <div className="mb-8">
+        <h3 className="text-sm font-semibold text-emerald-600 uppercase tracking-wide mb-3">Receitas</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {categories.filter(c => c.type === 'RECEITA').map(cat => (
+            <div key={cat.id} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border-l-4 border-gray-200 dark:border-gray-700 relative group" style={{ borderLeftColor: cat.color }}>
+              <div className="flex justify-between items-start">
+                <div className="flex items-center gap-2">
+                  <Tag size={16} style={{ color: cat.color }} />
+                  <h3 className="font-semibold text-gray-900 dark:text-white">{cat.name}</h3>
+                </div>
+                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => handleOpenModal(cat)} className="text-blue-500 hover:text-blue-700">
+                    <Edit2 size={16} />
+                  </button>
+                  <button onClick={() => handleDelete(cat)} className="text-gray-400 hover:text-red-500">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
-              <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => handleOpenModal(cat)} className="text-blue-500 hover:text-blue-700">
-                  <Edit2 size={16} />
-                </button>
-                <button onClick={() => handleDelete(cat)} className="text-gray-400 hover:text-red-500">
-                  <Trash2 size={16} />
-                </button>
+              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex gap-2">
+                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 bg-opacity-30">
+                  Receita
+                </span>
+                {cat.fixed && <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Fixa</span>}
               </div>
             </div>
-            <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex gap-2">
-              <span className={`px-2 py-0.5 rounded-full ${cat.type === 'RECEITA' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'} bg-opacity-30`}>
-                {cat.type === 'RECEITA' ? 'Receita' : 'Despesa'}
-              </span>
-              {cat.fixed && <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Fixa</span>}
+          ))}
+          {categories.filter(c => c.type === 'RECEITA').length === 0 && (
+             <div className="col-span-full py-4 text-gray-500 text-sm">Nenhuma categoria de receita cadastrada.</div>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-semibold text-rose-600 uppercase tracking-wide mb-3 mt-6">Despesas</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {categories.filter(c => c.type === 'DESPESA').map(cat => (
+            <div key={cat.id} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border-l-4 border-gray-200 dark:border-gray-700 relative group" style={{ borderLeftColor: cat.color }}>
+              <div className="flex justify-between items-start">
+                <div className="flex items-center gap-2">
+                  <Tag size={16} style={{ color: cat.color }} />
+                  <h3 className="font-semibold text-gray-900 dark:text-white">{cat.name}</h3>
+                </div>
+                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => handleOpenModal(cat)} className="text-blue-500 hover:text-blue-700">
+                    <Edit2 size={16} />
+                  </button>
+                  <button onClick={() => handleDelete(cat)} className="text-gray-400 hover:text-red-500">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex gap-2">
+                <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 bg-opacity-30">
+                  Despesa
+                </span>
+                {cat.fixed && <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Fixa</span>}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+          {categories.filter(c => c.type === 'DESPESA').length === 0 && (
+             <div className="col-span-full py-4 text-gray-500 text-sm">Nenhuma categoria de despesa cadastrada.</div>
+          )}
+        </div>
       </div>
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? "Editar Categoria" : "Nova Categoria"}>

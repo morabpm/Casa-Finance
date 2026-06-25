@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, Trash2, AlertCircle, Edit2, Copy } from 'lucide-react';
 import { Budget, Category, Transaction } from '../types';
-import { formatCurrency, generateId, getMonthName } from '../utils';
+import { formatCurrency, getMonthName } from '../utils';
 import { Modal } from './ui/Modal';
 import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
@@ -83,7 +83,7 @@ export const Budgets: React.FC<BudgetsProps> = ({ budgets, categories, transacti
       const exists = currentBudgets.some(cb => cb.category === pb.category);
       if (!exists) {
         onAdd({
-          id: generateId(),
+          id: crypto.randomUUID(),
           category: pb.category,
           amount: pb.amount,
           month: filterMonth,
@@ -108,7 +108,7 @@ export const Budgets: React.FC<BudgetsProps> = ({ budgets, categories, transacti
     } else {
       onAdd({
         ...formData as Budget,
-        id: generateId()
+        id: crypto.randomUUID()
       });
       showToast('Orçamento definido com sucesso.', 'success');
     }
@@ -230,7 +230,7 @@ export const Budgets: React.FC<BudgetsProps> = ({ budgets, categories, transacti
               className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2 text-sm dark:text-white"
               value={formData.category}
               onChange={e => setFormData({...formData, category: e.target.value})}
-              disabled={!!editingId} // Usually good to prevent changing category on edit, but we can allow it if we want
+              disabled={!!editingId}
             >
               {categories.filter(c => c.type === 'DESPESA').map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>

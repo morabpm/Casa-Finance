@@ -1,17 +1,25 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 
+interface ConfirmOptions {
+  title?: string;
+  message: string;
+  confirmLabel?: string;
+  confirmClassName?: string;
+  onConfirm: () => void;
+}
+
 interface ConfirmContextType {
-  confirm: (options: { title?: string; message: string; onConfirm: () => void }) => void;
+  confirm: (options: ConfirmOptions) => void;
 }
 
 const ConfirmContext = createContext<ConfirmContextType | undefined>(undefined);
 
 export const ConfirmProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [options, setOptions] = useState<{ title?: string; message: string; onConfirm: () => void } | null>(null);
+  const [options, setOptions] = useState<ConfirmOptions | null>(null);
 
-  const confirm = (opts: { title?: string; message: string; onConfirm: () => void }) => {
+  const confirm = (opts: ConfirmOptions) => {
     setOptions(opts);
     setIsOpen(true);
   };
@@ -27,8 +35,10 @@ export const ConfirmProvider: React.FC<{ children: ReactNode }> = ({ children })
       {options && (
         <ConfirmModal 
           isOpen={isOpen}
-          title={options.title}
+          title={options.title || "Confirmar exclusão"}
           message={options.message}
+          confirmLabel={options.confirmLabel}
+          confirmClassName={options.confirmClassName}
           onConfirm={handleConfirm}
           onCancel={() => setIsOpen(false)}
         />

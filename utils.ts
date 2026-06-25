@@ -1,4 +1,4 @@
-import { Transaction, Category, Budget, AppData } from './types';
+import { Transaction, Category, Budget, AppData, ActivityLog } from './types';
 
 // Initial Seed Data
 export const INITIAL_CATEGORIES: Category[] = [
@@ -15,87 +15,94 @@ export const INITIAL_DATA: AppData = {
   categories: INITIAL_CATEGORIES,
   budgets: [],
   suppliers: [],
-  userProfile: {
-    name: 'Admin',
-    email: 'admin@casafinance.com',
-    role: 'Administrador',
-    companyName: 'Minha Empresa',
-  },
+  userProfile: { name: 'Admin', email: 'admin@casafinance.com', role: 'Administrador', companyName: 'Minha Empresa' },
   family: 'Família Feliz',
+  goals: [],
+  activityLog: [],
 };
 
-// Storage Helpers
 const STORAGE_KEY = 'casa_finance_pro_v1';
+
+export const migrateData = (raw: any): AppData => {
+  return {
+    ...INITIAL_DATA,
+    ...raw,
+    transactions: (raw.transactions || []).map((t: any) => ({
+      ...t,
+      id: String(t.id),
+      category: String(t.category),
+      supplierId: t.supplierId ? String(t.supplierId) : undefined,
+      notes: t.notes || undefined,
+      attachments: t.attachments || [],
+    })),
+    categories: (raw.categories || []).map((c: any) => ({
+      ...c,
+      id: String(c.id),
+    })),
+    budgets: (raw.budgets || []).map((b: any) => ({
+      ...b,
+      id: String(b.id),
+      category: String(b.category),
+    })),
+    suppliers: (raw.suppliers || []).map((s: any) => ({
+      ...s,
+      id: String(s.id),
+      categoryId: String(s.categoryId),
+    })),
+    goals: (raw.goals || []).map((g: any) => ({ ...g, id: String(g.id) })),
+    activityLog: raw.activityLog || [],
+    userProfile: raw.userProfile || INITIAL_DATA.userProfile,
+    family: raw.family || INITIAL_DATA.family,
+  };
+};
 
 export const loadData = (): AppData => {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      // Migrate legacy numbers to strings
-      if (parsed.categories) {
-        parsed.categories = parsed.categories.map((c: any) => ({ ...c, id: String(c.id) }));
-      }
-      if (parsed.transactions) {
-        parsed.transactions = parsed.transactions.map((t: any) => ({ ...t, id: String(t.id), category: String(t.category) }));
-      }
-      if (parsed.budgets) {
-        parsed.budgets = parsed.budgets.map((b: any) => ({ ...b, id: String(b.id), category: String(b.category) }));
-      }
-      if (parsed.suppliers) {
-        parsed.suppliers = parsed.suppliers.map((s: any) => ({ ...s, id: String(s.id), categoryId: String(s.categoryId) }));
-      }
-      return { ...INITIAL_DATA, ...parsed };
-    }
+    if (saved) return migrateData(JSON.parse(saved));
     return INITIAL_DATA;
-  } catch (e) {
-    console.error("Failed to load data", e);
-    return INITIAL_DATA;
-  }
+  } catch { return INITIAL_DATA; }
 };
 
 export const saveData = (data: AppData) => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch (e) {
-    console.error("Failed to save data", e);
-  }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {}
 };
 
-// Formatting Helpers
-export const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(value);
-};
+export const createLog = (
+  action: ActivityLog['action'],
+  entity: ActivityLog['entity'],
+  entityId: string,
+  description: string
+): ActivityLog => ({
+  id: crypto.randomUUID(),
+  action,
+  entity,
+  entityId,
+  description,
+  timestamp: new Date().toISOString(),
+});
+
+export const formatCurrency = (value: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 export const formatDate = (dateString: string) => {
   const [year, month, day] = dateString.split('-');
   return `${day}/${month}/${year}`;
 };
 
-export const getMonthName = (monthIndex: number) => { // 0-11
-  const names = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+export const getMonthName = (monthIndex: number) => {
+  const names = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   return names[monthIndex] || '';
 };
 
-export const generateId = () => {
-  return crypto.randomUUID();
-};
-
-// Calculation Helpers
 export const calculateTotals = (transactions: Transaction[], month: number, year: number) => {
-  let income = 0;
-  let expense = 0;
-
+  let income = 0, expense = 0;
   transactions.forEach(t => {
-    const d = new Date(t.date + 'T12:00:00'); // avoid timezone issues
+    const d = new Date(t.date + 'T12:00:00');
     if (d.getMonth() === month && d.getFullYear() === year) {
       if (t.type === 'RECEITA') income += t.amount;
       else expense += t.amount;
     }
   });
-
   return { income, expense, balance: income - expense };
 };

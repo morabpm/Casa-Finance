@@ -19,6 +19,8 @@ export interface Transaction {
   type: TransactionType;
   status: TransactionStatus;
   attachments?: Attachment[];
+  notes?: string;
+  supplierId?: string;
 }
 
 export interface Category {
@@ -56,6 +58,25 @@ export interface UserProfile {
   companyName: string;
 }
 
+export interface Goal {
+  id: string;
+  name: string;
+  targetAmount: number;
+  currentAmount: number;
+  deadline: string; // YYYY-MM-DD
+  color: string;
+  icon: string; // emoji
+}
+
+export interface ActivityLog {
+  id: string;
+  action: 'CREATE' | 'EDIT' | 'DELETE';
+  entity: 'TRANSACTION' | 'CATEGORY' | 'BUDGET' | 'SUPPLIER' | 'GOAL';
+  entityId: string;
+  description: string;
+  timestamp: string; // ISO
+}
+
 export interface AppData {
   transactions: Transaction[];
   categories: Category[];
@@ -63,6 +84,8 @@ export interface AppData {
   suppliers: Supplier[];
   userProfile: UserProfile;
   family: string; // Legacy field, kept for compatibility
+  goals: Goal[];
+  activityLog: ActivityLog[];
 }
 
 export interface DateFilter {

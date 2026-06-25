@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Edit2, Trash2, Search, Truck, MessageCircle, Copy, Mail } from 'lucide-react';
 import { Supplier, Category } from '../types';
-import { generateId } from '../utils';
 import { Modal } from './ui/Modal';
 import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
@@ -87,7 +86,7 @@ export const Suppliers: React.FC<SuppliersProps> = ({ suppliers, categories, onA
       onEdit({ ...formData, id: editingId } as Supplier);
       showToast('Fornecedor atualizado.', 'success');
     } else {
-      onAdd({ ...formData, id: generateId() } as Supplier);
+      onAdd({ ...formData, id: crypto.randomUUID() } as Supplier);
       showToast('Fornecedor adicionado.', 'success');
     }
     setIsModalOpen(false);

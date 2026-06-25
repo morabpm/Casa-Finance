@@ -4,16 +4,20 @@ import { AlertTriangle } from 'lucide-react';
 
 interface ConfirmModalProps {
   isOpen: boolean;
-  title?: string;
+  title: string;
   message: string;
+  confirmLabel?: string;
+  confirmClassName?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }
 
 export const ConfirmModal: React.FC<ConfirmModalProps> = ({ 
   isOpen, 
-  title = "Confirmar exclusão", 
+  title, 
   message, 
+  confirmLabel = "Excluir",
+  confirmClassName = "bg-red-600 hover:bg-red-700 text-white",
   onConfirm, 
   onCancel 
 }) => {
@@ -31,9 +35,9 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           </button>
           <button 
             onClick={() => { onConfirm(); onCancel(); }}
-            className="px-6 py-2 rounded-md bg-red-600 text-white font-medium hover:bg-red-700 transition-colors"
+            className={`px-6 py-2 rounded-md font-medium transition-colors ${confirmClassName}`}
           >
-            Excluir
+            {confirmLabel}
           </button>
         </div>
       </div>

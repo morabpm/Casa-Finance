@@ -26,7 +26,22 @@ export default {
           900: '#1e3a8a',
           950: '#172554',
         }
-      }
+      },
+      keyframes: {
+        shake: {
+          '0%,100%': { transform: 'translateX(0)' },
+          '20%,60%': { transform: 'translateX(-6px)' },
+          '40%,80%': { transform: 'translateX(6px)' },
+        },
+        'slide-in-right': {
+          '0%': { transform: 'translateX(100%)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' },
+        },
+      },
+      animation: {
+        shake: 'shake 0.4s ease-in-out',
+        'slide-in-right': 'slide-in-right 0.3s ease-out',
+      },
     },
   },
   plugins: [],
