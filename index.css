@@ -2,11 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
-body { 
-  font-family: 'Inter', system-ui, -apple-system, sans-serif; 
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+  
+  body { 
+    @apply font-sans text-gray-900 antialiased bg-gray-50 dark:bg-gray-900;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }
 
-/* Custom scrollbar for webkit */
+/* Customização Profissional da Barra de Rolagem */
 ::-webkit-scrollbar { 
   width: 8px; 
   height: 8px; 
@@ -17,14 +27,19 @@ body {
 }
 
 ::-webkit-scrollbar-thumb { 
-  background: #cbd5e1; 
-  border-radius: 4px; 
-}
-
-.dark ::-webkit-scrollbar-thumb { 
-  background: #475569; 
+  @apply bg-gray-300 dark:bg-gray-700 rounded-full transition-colors border-2 border-transparent bg-clip-content;
 }
 
 ::-webkit-scrollbar-thumb:hover { 
-  background: #94a3b8; 
+  @apply bg-gray-400 dark:bg-gray-600; 
+}
+
+/* Utilitários de Animação */
+.fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }

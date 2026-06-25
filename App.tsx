@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { HashRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   WalletCards, 
@@ -24,10 +24,18 @@ import { Budgets } from './components/Budgets';
 import { Suppliers } from './components/Suppliers';
 import { Settings } from './components/Settings';
 
+// Contexts
+import { ToastProvider } from './context/ToastContext';
+import { ConfirmProvider } from './context/ConfirmContext';
+
 function App() {
   // State Management
   const [data, setData] = useState<AppData>(INITIAL_DATA);
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    const saved = localStorage.getItem('casa_finance_theme');
+    if (saved) return saved === 'dark';
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   // Dashboard Filter State (Lifted up to persist across tab switches)
@@ -40,11 +48,6 @@ function App() {
   useEffect(() => {
     const loaded = loadData();
     setData(loaded);
-    
-    // Check system preference for dark mode
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      setIsDark(true);
-    }
   }, []);
 
   // Persist Data changes
@@ -56,25 +59,29 @@ function App() {
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
+      localStorage.setItem('casa_finance_theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
+      localStorage.setItem('casa_finance_theme', 'light');
     }
   }, [isDark]);
 
   // Handlers
   const addTransaction = (t: Transaction) => setData(prev => ({ ...prev, transactions: [...prev.transactions, t] }));
   const editTransaction = (t: Transaction) => setData(prev => ({ ...prev, transactions: prev.transactions.map(item => item.id === t.id ? t : item) }));
-  const deleteTransaction = (id: number) => setData(prev => ({ ...prev, transactions: prev.transactions.filter(item => item.id !== id) }));
+  const deleteTransaction = (id: string) => setData(prev => ({ ...prev, transactions: prev.transactions.filter(item => item.id !== id) }));
 
   const addCategory = (c: Category) => setData(prev => ({ ...prev, categories: [...prev.categories, c] }));
-  const deleteCategory = (id: number) => setData(prev => ({ ...prev, categories: prev.categories.filter(item => item.id !== id) }));
+  const editCategory = (c: Category) => setData(prev => ({ ...prev, categories: prev.categories.map(item => item.id === c.id ? c : item) }));
+  const deleteCategory = (id: string) => setData(prev => ({ ...prev, categories: prev.categories.filter(item => item.id !== id) }));
 
   const addBudget = (b: Budget) => setData(prev => ({ ...prev, budgets: [...prev.budgets, b] }));
-  const deleteBudget = (id: number) => setData(prev => ({ ...prev, budgets: prev.budgets.filter(item => item.id !== id) }));
+  const editBudget = (b: Budget) => setData(prev => ({ ...prev, budgets: prev.budgets.map(item => item.id === b.id ? b : item) }));
+  const deleteBudget = (id: string) => setData(prev => ({ ...prev, budgets: prev.budgets.filter(item => item.id !== id) }));
 
   const addSupplier = (s: Supplier) => setData(prev => ({ ...prev, suppliers: [...(prev.suppliers || []), s] }));
   const editSupplier = (s: Supplier) => setData(prev => ({ ...prev, suppliers: prev.suppliers.map(item => item.id === s.id ? s : item) }));
-  const deleteSupplier = (id: number) => setData(prev => ({ ...prev, suppliers: prev.suppliers.filter(item => item.id !== id) }));
+  const deleteSupplier = (id: string) => setData(prev => ({ ...prev, suppliers: prev.suppliers.filter(item => item.id !== id) }));
 
   const updateProfile = (profile: UserProfile) => setData(prev => ({ ...prev, userProfile: profile }));
 
@@ -91,14 +98,16 @@ function App() {
   ];
 
   return (
-    <HashRouter>
-      <div className="flex h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden">
-        
-        {/* Sidebar (Desktop) */}
+    <ToastProvider>
+      <ConfirmProvider>
+        <BrowserRouter>
+          <div className="flex h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden">
+            
+            {/* Sidebar (Desktop) */}
         <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
           <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
              <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center text-white font-bold">CF</div>
-             <h1 className="text-xl font-bold tracking-tight">Casa Finance</h1>
+             <h1 className="text-xl font-bold tracking-tight">Casa Finance Pro</h1>
           </div>
           
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
@@ -203,8 +212,11 @@ function App() {
                 } />
                 <Route path="/categories" element={
                   <Categories 
-                    categories={data.categories} 
+                    categories={data.categories}
+                    transactions={data.transactions}
+                    budgets={data.budgets}
                     onAdd={addCategory} 
+                    onEdit={editCategory}
                     onDelete={deleteCategory} 
                   />
                 } />
@@ -214,6 +226,7 @@ function App() {
                     categories={data.categories} 
                     transactions={data.transactions}
                     onAdd={addBudget} 
+                    onEdit={editBudget}
                     onDelete={deleteBudget} 
                   />
                 } />
@@ -238,7 +251,9 @@ function App() {
           </main>
         </div>
       </div>
-    </HashRouter>
+    </BrowserRouter>
+      </ConfirmProvider>
+    </ToastProvider>
   );
 }
 

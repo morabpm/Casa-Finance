@@ -1,30 +1,56 @@
-import React, { useState } from 'react';
-import { Plus, Trash2, AlertCircle } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Plus, Trash2, AlertCircle, Edit2, Copy } from 'lucide-react';
 import { Budget, Category, Transaction } from '../types';
 import { formatCurrency, generateId, getMonthName } from '../utils';
 import { Modal } from './ui/Modal';
+import { useConfirm } from '../context/ConfirmContext';
+import { useToast } from '../context/ToastContext';
 
 interface BudgetsProps {
   budgets: Budget[];
   categories: Category[];
   transactions: Transaction[];
   onAdd: (b: Budget) => void;
-  onDelete: (id: number) => void;
+  onEdit: (b: Budget) => void;
+  onDelete: (id: string) => void;
 }
 
-export const Budgets: React.FC<BudgetsProps> = ({ budgets, categories, transactions, onAdd, onDelete }) => {
+export const Budgets: React.FC<BudgetsProps> = ({ budgets, categories, transactions, onAdd, onEdit, onDelete }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const currentMonth = new Date().getMonth();
   const currentYear = new Date().getFullYear();
+  
+  const [filterMonth, setFilterMonth] = useState(currentMonth);
+  const [filterYear, setFilterYear] = useState(currentYear);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const { confirm } = useConfirm();
+  const { showToast } = useToast();
 
   const [formData, setFormData] = useState<Partial<Budget>>({
     amount: 0,
-    category: categories[0]?.id || 0,
+    category: categories[0]?.id || '',
     month: currentMonth,
     year: currentYear
   });
 
-  const getSpent = (catId: number, month: number, year: number) => {
+  const handleOpenModal = (b?: Budget) => {
+    if (b) {
+      setEditingId(b.id);
+      setFormData(b);
+    } else {
+      setEditingId(null);
+      setFormData({
+        amount: 0,
+        category: categories[0]?.id || '',
+        month: filterMonth,
+        year: filterYear
+      });
+    }
+    setIsModalOpen(true);
+  };
+
+  const getSpent = (catId: string, month: number, year: number) => {
     return transactions
       .filter(t => t.category === catId && t.type === 'DESPESA')
       .filter(t => {
@@ -34,34 +60,108 @@ export const Budgets: React.FC<BudgetsProps> = ({ budgets, categories, transacti
       .reduce((acc, t) => acc + t.amount, 0);
   };
 
+  const filteredBudgets = useMemo(() => {
+    return budgets
+      .filter(b => b.month === filterMonth && b.year === filterYear)
+      .map(b => {
+        const spent = getSpent(b.category, b.month, b.year);
+        const percentage = b.amount > 0 ? (spent / b.amount) * 100 : 0;
+        return { ...b, spent, percentage };
+      })
+      .sort((a, b) => b.percentage - a.percentage);
+  }, [budgets, filterMonth, filterYear, transactions]);
+
+  const handleCopyFromPrevious = () => {
+    const prevMonth = filterMonth === 0 ? 11 : filterMonth - 1;
+    const prevYear = filterMonth === 0 ? filterYear - 1 : filterYear;
+
+    const prevBudgets = budgets.filter(b => b.month === prevMonth && b.year === prevYear);
+    const currentBudgets = budgets.filter(b => b.month === filterMonth && b.year === filterYear);
+    
+    let addedCount = 0;
+    prevBudgets.forEach(pb => {
+      const exists = currentBudgets.some(cb => cb.category === pb.category);
+      if (!exists) {
+        onAdd({
+          id: generateId(),
+          category: pb.category,
+          amount: pb.amount,
+          month: filterMonth,
+          year: filterYear
+        });
+        addedCount++;
+      }
+    });
+
+    if (addedCount > 0) {
+      showToast(`${addedCount} orçamentos copiados do mês anterior.`, 'success');
+    } else {
+      showToast('Nenhum orçamento novo para copiar.', 'info');
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onAdd({
-      ...formData as Budget,
-      id: generateId(budgets.map(b => ({ id: b.id })))
-    });
+    if (editingId) {
+      onEdit({ ...formData, id: editingId } as Budget);
+      showToast('Orçamento atualizado com sucesso.', 'success');
+    } else {
+      onAdd({
+        ...formData as Budget,
+        id: generateId()
+      });
+      showToast('Orçamento definido com sucesso.', 'success');
+    }
     setIsModalOpen(false);
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
         <h2 className="text-xl font-bold text-gray-800 dark:text-white">Orçamentos</h2>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-        >
-          <Plus size={18} /> Novo Orçamento
-        </button>
+        
+        <div className="flex flex-wrap items-center gap-2">
+          <select 
+            className="rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm dark:text-white p-2"
+            value={filterMonth}
+            onChange={(e) => setFilterMonth(parseInt(e.target.value))}
+          >
+            {Array.from({ length: 12 }, (_, i) => (
+              <option key={i} value={i}>{getMonthName(i)}</option>
+            ))}
+          </select>
+          <select 
+            className="rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm dark:text-white p-2"
+            value={filterYear}
+            onChange={(e) => setFilterYear(parseInt(e.target.value))}
+          >
+            {[currentYear - 1, currentYear, currentYear + 1].map(y => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+          
+          <button 
+            onClick={handleCopyFromPrevious}
+            className="flex items-center gap-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-3 py-2 rounded-md text-sm font-medium transition-colors ml-auto md:ml-0"
+            title="Copiar do mês anterior"
+          >
+            <Copy size={16} /> <span className="hidden sm:inline">Copiar Anterior</span>
+          </button>
+          <button 
+            onClick={() => handleOpenModal()}
+            className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+          >
+            <Plus size={18} /> <span className="hidden sm:inline">Novo</span>
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {budgets.map(budget => {
+        {filteredBudgets.map(budget => {
           const category = categories.find(c => c.id === budget.category);
           if (!category) return null;
           
-          const spent = getSpent(budget.category, budget.month, budget.year);
-          const percentage = Math.min((spent / budget.amount) * 100, 100);
+          const { spent, percentage } = budget;
           const isOver = spent > budget.amount;
           
           let barColor = 'bg-emerald-500';
@@ -75,9 +175,20 @@ export const Budgets: React.FC<BudgetsProps> = ({ budgets, categories, transacti
                   <h3 className="font-bold text-gray-900 dark:text-white text-lg">{category.name}</h3>
                   <p className="text-xs text-gray-500 uppercase tracking-wide">{getMonthName(budget.month)} / {budget.year}</p>
                 </div>
-                <button onClick={() => onDelete(budget.id)} className="text-gray-400 hover:text-red-500 transition-colors">
-                  <Trash2 size={18} />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => handleOpenModal(budget)} className="text-blue-500 hover:text-blue-700 p-1" title="Editar">
+                    <Edit2 size={16} />
+                  </button>
+                  <button onClick={() => confirm({
+                    message: 'Tem certeza que deseja excluir este orçamento?',
+                    onConfirm: () => {
+                      onDelete(budget.id);
+                      showToast('Orçamento excluído com sucesso.', 'success');
+                    }
+                  })} className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Excluir">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
 
               <div className="flex justify-between items-end mb-2">
@@ -92,7 +203,7 @@ export const Budgets: React.FC<BudgetsProps> = ({ budgets, categories, transacti
               </div>
 
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
-                <div className={`h-2.5 rounded-full ${barColor} transition-all duration-500`} style={{ width: `${percentage}%` }}></div>
+                <div className={`h-2.5 rounded-full ${barColor} transition-all duration-500`} style={{ width: `${Math.min(percentage, 100)}%` }}></div>
               </div>
               
               {isOver && (
@@ -104,21 +215,22 @@ export const Budgets: React.FC<BudgetsProps> = ({ budgets, categories, transacti
             </div>
           );
         })}
-        {budgets.length === 0 && (
+        {filteredBudgets.length === 0 && (
            <div className="col-span-full p-8 text-center text-gray-500 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
-             Não há orçamentos definidos. Crie um para começar a controlar seus gastos.
+             Não há orçamentos definidos para este período. Crie um ou copie do mês anterior.
            </div>
         )}
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Novo Orçamento">
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? "Editar Orçamento" : "Novo Orçamento"}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Categoria</label>
             <select 
               className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2 text-sm dark:text-white"
               value={formData.category}
-              onChange={e => setFormData({...formData, category: parseInt(e.target.value)})}
+              onChange={e => setFormData({...formData, category: e.target.value})}
+              disabled={!!editingId} // Usually good to prevent changing category on edit, but we can allow it if we want
             >
               {categories.filter(c => c.type === 'DESPESA').map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>

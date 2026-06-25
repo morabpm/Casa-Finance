@@ -1,17 +1,25 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Tag } from 'lucide-react';
-import { Category, TransactionType } from '../types';
+import { Plus, Trash2, Tag, Edit2 } from 'lucide-react';
+import { Category, TransactionType, Transaction, Budget } from '../types';
 import { generateId } from '../utils';
 import { Modal } from './ui/Modal';
+import { useConfirm } from '../context/ConfirmContext';
+import { useToast } from '../context/ToastContext';
 
 interface CategoriesProps {
   categories: Category[];
+  transactions: Transaction[];
+  budgets: Budget[];
   onAdd: (c: Category) => void;
-  onDelete: (id: number) => void;
+  onEdit: (c: Category) => void;
+  onDelete: (id: string) => void;
 }
 
-export const Categories: React.FC<CategoriesProps> = ({ categories, onAdd, onDelete }) => {
+export const Categories: React.FC<CategoriesProps> = ({ categories, transactions, budgets, onAdd, onEdit, onDelete }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const { confirm } = useConfirm();
+  const { showToast } = useToast();
   const [formData, setFormData] = useState<Partial<Category>>({
     name: '',
     type: 'DESPESA',
@@ -19,12 +27,48 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onAdd, onDel
     fixed: false
   });
 
+  const handleOpenModal = (c?: Category) => {
+    if (c) {
+      setEditingId(c.id);
+      setFormData(c);
+    } else {
+      setEditingId(null);
+      setFormData({ name: '', type: 'DESPESA', color: '#3b82f6', fixed: false });
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = (cat: Category) => {
+    const linkedTx = transactions.filter(t => t.category === cat.id).length;
+    const linkedBg = budgets.filter(b => b.category === cat.id).length;
+    const total = linkedTx + linkedBg;
+    
+    if (total > 0) {
+      showToast(`Esta categoria possui ${total} transações vinculadas e não pode ser excluída.`, 'error');
+      return;
+    }
+
+    confirm({
+      message: 'Tem certeza que deseja excluir esta categoria?',
+      onConfirm: () => {
+        onDelete(cat.id);
+        showToast('Categoria excluída.', 'success');
+      }
+    });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onAdd({ 
-      ...formData as Category, 
-      id: generateId(categories.map(c => ({ id: c.id }))) 
-    });
+    if (editingId) {
+      onEdit({ ...formData, id: editingId } as Category);
+      showToast('Categoria atualizada com sucesso.', 'success');
+    } else {
+      onAdd({ 
+        ...formData as Category, 
+        id: generateId() 
+      });
+      showToast('Categoria salva com sucesso.', 'success');
+    }
     setIsModalOpen(false);
     setFormData({ name: '', type: 'DESPESA', color: '#3b82f6', fixed: false });
   };
@@ -34,7 +78,7 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onAdd, onDel
       <div className="flex justify-between items-center bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
         <h2 className="text-xl font-bold text-gray-800 dark:text-white">Gerenciar Categorias</h2>
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => handleOpenModal()}
           className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
         >
           <Plus size={18} /> Nova Categoria
@@ -49,9 +93,14 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onAdd, onDel
                 <Tag size={16} style={{ color: cat.color }} />
                 <h3 className="font-semibold text-gray-900 dark:text-white">{cat.name}</h3>
               </div>
-              <button onClick={() => onDelete(cat.id)} className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Trash2 size={16} />
-              </button>
+              <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => handleOpenModal(cat)} className="text-blue-500 hover:text-blue-700">
+                  <Edit2 size={16} />
+                </button>
+                <button onClick={() => handleDelete(cat)} className="text-gray-400 hover:text-red-500">
+                  <Trash2 size={16} />
+                </button>
+              </div>
             </div>
             <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex gap-2">
               <span className={`px-2 py-0.5 rounded-full ${cat.type === 'RECEITA' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'} bg-opacity-30`}>
@@ -63,7 +112,7 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onAdd, onDel
         ))}
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Nova Categoria">
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? "Editar Categoria" : "Nova Categoria"}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome</label>

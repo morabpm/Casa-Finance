@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { Download, Upload, Save, FileJson, User, Database, Check } from 'lucide-react';
+import { Download, Upload, Save, FileJson, User, Database, Check, FileText } from 'lucide-react';
 import { AppData, UserProfile } from '../types';
+import { useConfirm } from '../context/ConfirmContext';
+import { useToast } from '../context/ToastContext';
 
 interface SettingsProps {
   data: AppData;
@@ -14,6 +16,10 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
     name: '', email: '', role: '', companyName: ''
   });
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
+  const [profileError, setProfileError] = useState<string | null>(null);
+  
+  const { confirm } = useConfirm();
+  const { showToast } = useToast();
 
   const handleExport = () => {
     // Ensure we export the current state fully
@@ -32,6 +38,35 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
     link.click();
   };
 
+  const handleExportCSV = () => {
+    // CSV Header
+    const headers = ['ID', 'Data', 'Descrição', 'Categoria', 'Tipo', 'Valor', 'Status'];
+    
+    // CSV Rows
+    const rows = data.transactions.map(t => {
+      const categoryName = data.categories.find(c => c.id === t.category)?.name || 'Desconhecida';
+      return [
+        t.id,
+        t.date,
+        `"${t.description.replace(/"/g, '""')}"`, // Escape quotes
+        `"${categoryName}"`,
+        t.type,
+        t.amount.toFixed(2),
+        t.status
+      ].join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `casa_finance_export_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileReader = new FileReader();
     if (e.target.files && e.target.files[0]) {
@@ -42,20 +77,22 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
             const parsed = JSON.parse(event.target.result as string);
             // Basic validation
             if (parsed.transactions && parsed.categories) {
-              if(confirm("Isso substituirá TODOS os dados atuais (transações, categorias, fornecedores, etc). Continuar?")) {
-                 onImport(parsed);
-                 // Update local profile state if imported data has profile
-                 if (parsed.userProfile) {
-                   setProfileForm(parsed.userProfile);
-                 }
-                 alert("Backup restaurado com sucesso!");
-              }
+              confirm({
+                message: "Isso substituirá TODOS os dados atuais (transações, categorias, fornecedores, etc). Continuar?",
+                onConfirm: () => {
+                  onImport(parsed);
+                  if (parsed.userProfile) {
+                    setProfileForm(parsed.userProfile);
+                  }
+                  showToast("Backup restaurado com sucesso!", "success");
+                }
+              });
             } else {
-              alert("Arquivo inválido. Verifique se é um backup do Casa Finance Pro.");
+              showToast("Arquivo inválido. Verifique se é um backup do Casa Finance Pro.", "error");
             }
           }
         } catch (err) {
-          alert("Erro ao ler o arquivo. O JSON pode estar corrompido.");
+          showToast("Erro ao ler o arquivo. O JSON pode estar corrompido.", "error");
         }
       };
     }
@@ -63,8 +100,14 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
 
   const handleProfileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!profileForm.name.trim() || !profileForm.email.trim()) {
+      setProfileError('Nome e Email são obrigatórios.');
+      return;
+    }
+    setProfileError(null);
     onUpdateProfile(profileForm);
     setSaveStatus('saved');
+    showToast('Perfil atualizado com sucesso!', 'success');
     setTimeout(() => setSaveStatus('idle'), 3000);
   };
 
@@ -93,6 +136,11 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 animate-in slide-in-from-left-4 duration-300">
           <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Perfil do Operador</h3>
           <form onSubmit={handleProfileSubmit} className="space-y-4 max-w-lg">
+             {profileError && (
+               <div className="p-3 bg-red-100 text-red-700 rounded-md text-sm">
+                 {profileError}
+               </div>
+             )}
              <div>
                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome Completo</label>
                <input 
@@ -100,7 +148,10 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
                  required
                  className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2 text-sm dark:text-white"
                  value={profileForm.name}
-                 onChange={e => setProfileForm({...profileForm, name: e.target.value})}
+                 onChange={e => {
+                   setProfileForm({...profileForm, name: e.target.value});
+                   if (profileError) setProfileError(null);
+                 }}
                />
              </div>
              <div>
@@ -110,7 +161,10 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
                  required
                  className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2 text-sm dark:text-white"
                  value={profileForm.email}
-                 onChange={e => setProfileForm({...profileForm, email: e.target.value})}
+                 onChange={e => {
+                   setProfileForm({...profileForm, email: e.target.value});
+                   if (profileError) setProfileError(null);
+                 }}
                />
              </div>
              <div className="grid grid-cols-2 gap-4">
@@ -159,16 +213,24 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
             <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-md mb-6 text-xs text-gray-500 font-mono">
               {data.transactions.length} transações<br/>
               {data.categories.length} categorias<br/>
-              {data.suppliers.length} fornecedores<br/>
-              Perfil: {data.userProfile.name}
+              {data.suppliers?.length || 0} fornecedores<br/>
+              {data.budgets.length} orçamentos
             </div>
 
-            <button 
-              onClick={handleExport}
-              className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-md transition-colors"
-            >
-              <Save size={18} /> Baixar Backup
-            </button>
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={handleExport}
+                className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-md transition-colors"
+              >
+                <Save size={18} /> Baixar Backup (JSON)
+              </button>
+              <button 
+                onClick={handleExportCSV}
+                className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md transition-colors"
+              >
+                <FileText size={18} /> Exportar para Excel (CSV)
+              </button>
+            </div>
           </div>
 
           {/* Import Card */}

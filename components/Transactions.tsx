@@ -1,52 +1,125 @@
-import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, Search, Filter, Paperclip, X, FileText, Download, Calendar } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Plus, Edit2, Trash2, Search, Paperclip, X, FileText, Download, Copy, Repeat, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Transaction, Category, TransactionType, TransactionStatus, Attachment } from '../types';
-import { formatDate, formatCurrency, generateId } from '../utils';
+import { formatDate, formatCurrency, generateId, getMonthName } from '../utils';
 import { Modal } from './ui/Modal';
+import { useConfirm } from '../context/ConfirmContext';
+import { useToast } from '../context/ToastContext';
 
 interface TransactionsProps {
   transactions: Transaction[];
   categories: Category[];
   onAdd: (t: Transaction) => void;
   onEdit: (t: Transaction) => void;
-  onDelete: (id: number) => void;
+  onDelete: (id: string) => void;
 }
 
 export const Transactions: React.FC<TransactionsProps> = ({ transactions, categories, onAdd, onEdit, onDelete }) => {
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<TransactionType | ''>('');
+  const [filterMonth, setFilterMonth] = useState(currentMonth);
+  const [filterYear, setFilterYear] = useState(currentYear);
+  const [filterStatus, setFilterStatus] = useState<TransactionStatus | 'TODOS'>('TODOS');
+  const [filterCategory, setFilterCategory] = useState<string>('');
+  
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
+
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [attachmentDateFilter, setAttachmentDateFilter] = useState('');
+  
+  const { confirm } = useConfirm();
+  const { showToast } = useToast();
 
   // Form State
   const [formData, setFormData] = useState<Partial<Transaction>>({
     date: new Date().toISOString().split('T')[0],
     description: '',
     amount: 0,
-    category: 0,
+    category: '',
     type: 'DESPESA',
     status: 'REALIZADO',
     attachments: []
   });
+  
+  // Recurring State
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringCount, setRecurringCount] = useState(2);
 
-  const filteredTransactions = transactions
-    .filter(t => t.description.toLowerCase().includes(searchTerm.toLowerCase()))
-    .filter(t => filterType ? t.type === filterType : true)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  // Filters Reset on Month/Year change
+  const handleMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setFilterMonth(parseInt(e.target.value));
+    setCurrentPage(1);
+  };
 
-  const handleOpenModal = (t?: Transaction) => {
+  const handleYearChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setFilterYear(parseInt(e.target.value));
+    setCurrentPage(1);
+  };
+
+  // Filter Logic
+  const filteredTransactions = useMemo(() => {
+    return transactions
+      .filter(t => {
+        const d = new Date(t.date);
+        return d.getMonth() === filterMonth && d.getFullYear() === filterYear;
+      })
+      .filter(t => t.description.toLowerCase().includes(searchTerm.toLowerCase()))
+      .filter(t => filterType ? t.type === filterType : true)
+      .filter(t => filterStatus !== 'TODOS' ? t.status === filterStatus : true)
+      .filter(t => filterCategory ? t.category === filterCategory : true)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [transactions, filterMonth, filterYear, searchTerm, filterType, filterStatus, filterCategory]);
+
+  // Totals
+  const { totalIncome, totalExpense, balance } = useMemo(() => {
+    return filteredTransactions.reduce(
+      (acc, t) => {
+        if (t.type === 'RECEITA') acc.totalIncome += t.amount;
+        else acc.totalExpense += t.amount;
+        acc.balance = acc.totalIncome - acc.totalExpense;
+        return acc;
+      },
+      { totalIncome: 0, totalExpense: 0, balance: 0 }
+    );
+  }, [filteredTransactions]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE) || 1;
+  const paginatedTransactions = filteredTransactions.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  const handleOpenModal = (t?: Transaction, isDuplicate: boolean = false) => {
     setAttachmentDateFilter('');
+    setIsRecurring(false);
+    setRecurringCount(2);
+
     if (t) {
-      setEditingId(t.id);
-      setFormData({ ...t, attachments: t.attachments || [] });
+      if (isDuplicate) {
+        setEditingId(null);
+        setFormData({
+          ...t,
+          description: `${t.description} (Cópia)`,
+          date: new Date().toISOString().split('T')[0],
+          attachments: [] 
+        });
+      } else {
+        setEditingId(t.id);
+        setFormData({ ...t, attachments: t.attachments || [] });
+      }
     } else {
       setEditingId(null);
       setFormData({
         date: new Date().toISOString().split('T')[0],
         description: '',
         amount: 0,
-        category: categories[0]?.id || 0,
+        category: categories[0]?.id || '',
         type: 'DESPESA',
         status: 'REALIZADO',
         attachments: []
@@ -57,10 +130,31 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (editingId) {
       onEdit({ ...formData, id: editingId } as Transaction);
+      showToast('Transação atualizada.', 'success');
     } else {
-      onAdd({ ...formData, id: generateId(transactions.map(t => ({ id: t.id }))) } as Transaction);
+      const baseTransaction = { ...formData };
+      
+      if (isRecurring && recurringCount > 1) {
+        for (let i = 0; i < recurringCount; i++) {
+          const newDate = new Date(baseTransaction.date as string);
+          newDate.setMonth(newDate.getMonth() + i);
+          
+          const t: Transaction = {
+            ...(baseTransaction as Transaction),
+            id: generateId(),
+            date: newDate.toISOString().split('T')[0],
+            status: i === 0 ? (baseTransaction.status as TransactionStatus) : 'PLANEJADO'
+          };
+          onAdd(t);
+        }
+        showToast(`${recurringCount} transações adicionadas.`, 'success');
+      } else {
+        onAdd({ ...formData, id: generateId() } as Transaction);
+        showToast('Transação adicionada.', 'success');
+      }
     }
     setIsModalOpen(false);
   };
@@ -72,7 +166,7 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
 
       const validFiles = files.filter(file => {
         if (file.size > MAX_SIZE) {
-          alert(`O arquivo "${file.name}" excede o limite de 1MB e será ignorado.`);
+          showToast(`O arquivo "${file.name}" excede o limite de 1MB e será ignorado.`, 'error');
           return false;
         }
         return true;
@@ -132,7 +226,7 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
   });
 
   // Helper to get category color/name
-  const getCatDetails = (id: number) => categories.find(c => c.id === id) || { name: 'Unknown', color: '#9ca3af' };
+  const getCatDetails = (id: string) => categories.find(c => c.id === id) || { name: 'Unknown', color: '#9ca3af' };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -141,32 +235,89 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
       <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
         <h2 className="text-xl font-bold text-gray-800 dark:text-white">Lançamentos</h2>
         
-        <div className="flex flex-1 w-full md:w-auto gap-2 md:justify-end">
-          <div className="relative flex-1 md:max-w-xs">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="Buscar..." 
-              className="w-full pl-10 pr-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-            />
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
           <select 
             className="rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm dark:text-white p-2"
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value as any)}
+            value={filterMonth}
+            onChange={handleMonthChange}
           >
-            <option value="">Todos</option>
-            <option value="RECEITA">Receitas</option>
-            <option value="DESPESA">Despesas</option>
+            {Array.from({ length: 12 }, (_, i) => (
+              <option key={i} value={i}>{getMonthName(i)}</option>
+            ))}
+          </select>
+          <select 
+            className="rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm dark:text-white p-2"
+            value={filterYear}
+            onChange={handleYearChange}
+          >
+            {[currentYear - 1, currentYear, currentYear + 1].map(y => (
+              <option key={y} value={y}>{y}</option>
+            ))}
           </select>
           <button 
             onClick={() => handleOpenModal()}
-            className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+            className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors ml-auto md:ml-2"
           >
             <Plus size={18} /> <span className="hidden sm:inline">Novo</span>
           </button>
+        </div>
+      </div>
+
+      {/* Advanced Filters */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+          <input 
+            type="text" 
+            placeholder="Buscar..." 
+            className="w-full pl-10 pr-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm focus:ring-2 focus:ring-brand-500 outline-none dark:text-white shadow-sm"
+            value={searchTerm}
+            onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+          />
+        </div>
+        <select 
+          className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm dark:text-white p-2 shadow-sm"
+          value={filterType}
+          onChange={(e) => { setFilterType(e.target.value as any); setCurrentPage(1); }}
+        >
+          <option value="">Tipo (Todos)</option>
+          <option value="RECEITA">Receitas</option>
+          <option value="DESPESA">Despesas</option>
+        </select>
+        <select 
+          className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm dark:text-white p-2 shadow-sm"
+          value={filterStatus}
+          onChange={(e) => { setFilterStatus(e.target.value as any); setCurrentPage(1); }}
+        >
+          <option value="TODOS">Status (Todos)</option>
+          <option value="REALIZADO">Realizado</option>
+          <option value="PLANEJADO">Planejado</option>
+        </select>
+        <select 
+          className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm dark:text-white p-2 shadow-sm"
+          value={filterCategory}
+          onChange={(e) => { setFilterCategory(e.target.value); setCurrentPage(1); }}
+        >
+          <option value="">Categoria (Todas)</option>
+          {categories.map(c => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Totals Summary */}
+      <div className="flex flex-wrap gap-4 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="flex-1 min-w-[150px]">
+          <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Receitas (Filtro)</p>
+          <p className="text-lg font-bold text-emerald-600">{formatCurrency(totalIncome)}</p>
+        </div>
+        <div className="flex-1 min-w-[150px]">
+          <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Despesas (Filtro)</p>
+          <p className="text-lg font-bold text-rose-600">{formatCurrency(totalExpense)}</p>
+        </div>
+        <div className="flex-1 min-w-[150px]">
+          <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Saldo (Filtro)</p>
+          <p className={`text-lg font-bold ${balance >= 0 ? 'text-brand-600' : 'text-rose-600'}`}>{formatCurrency(balance)}</p>
         </div>
       </div>
 
@@ -185,14 +336,14 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {filteredTransactions.length === 0 ? (
+              {paginatedTransactions.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                     Nenhum lançamento encontrado.
                   </td>
                 </tr>
               ) : (
-                filteredTransactions.map(t => {
+                paginatedTransactions.map(t => {
                   const cat = getCatDetails(t.category);
                   return (
                     <tr key={t.id} className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
@@ -230,10 +381,19 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end gap-2">
-                          <button onClick={() => handleOpenModal(t)} className="text-blue-500 hover:text-blue-700 p-1">
+                          <button onClick={() => handleOpenModal(t, true)} className="text-gray-500 hover:text-brand-600 p-1" title="Duplicar">
+                            <Copy size={16} />
+                          </button>
+                          <button onClick={() => handleOpenModal(t)} className="text-blue-500 hover:text-blue-700 p-1" title="Editar">
                             <Edit2 size={16} />
                           </button>
-                          <button onClick={() => onDelete(t.id)} className="text-red-500 hover:text-red-700 p-1">
+                          <button onClick={() => confirm({
+                            message: 'Tem certeza que deseja excluir este lançamento?',
+                            onConfirm: () => {
+                              onDelete(t.id);
+                              showToast('Lançamento excluído com sucesso.', 'success');
+                            }
+                          })} className="text-red-500 hover:text-red-700 p-1" title="Excluir">
                             <Trash2 size={16} />
                           </button>
                         </div>
@@ -245,6 +405,31 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
             </tbody>
           </table>
         </div>
+        
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="px-6 py-4 flex items-center justify-between border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+            <span className="text-sm text-gray-700 dark:text-gray-300">
+              Página <span className="font-medium">{currentPage}</span> de <span className="font-medium">{totalPages}</span>
+            </span>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="p-1 rounded-md text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <button 
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="p-1 rounded-md text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal Form */}
@@ -294,7 +479,7 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
                 className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2 text-sm dark:text-white"
                 value={formData.category}
                 onChange={e => {
-                  const catId = parseInt(e.target.value);
+                  const catId = e.target.value;
                   const cat = categories.find(c => c.id === catId);
                   setFormData({
                     ...formData, 
@@ -320,6 +505,39 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
               </select>
             </div>
           </div>
+
+          {/* Recurring Option (Only for new transactions) */}
+          {!editingId && (
+            <div className="bg-gray-50 dark:bg-gray-700/30 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+              <div className="flex items-center gap-2 mb-2">
+                <input 
+                  type="checkbox" 
+                  id="recurring"
+                  checked={isRecurring}
+                  onChange={e => setIsRecurring(e.target.checked)}
+                  className="rounded text-brand-600 focus:ring-brand-500"
+                />
+                <label htmlFor="recurring" className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                  <Repeat size={14} /> Repetir lançamento
+                </label>
+              </div>
+              
+              {isRecurring && (
+                <div className="flex items-center gap-2 mt-2 animate-in slide-in-from-top-2">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Repetir por</span>
+                  <input 
+                    type="number" 
+                    min="2" 
+                    max="60" 
+                    value={recurringCount}
+                    onChange={e => setRecurringCount(parseInt(e.target.value))}
+                    className="w-16 rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-1 text-sm text-center"
+                  />
+                  <span className="text-sm text-gray-600 dark:text-gray-400">meses (mensalmente)</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Attachments Section */}
           <div>

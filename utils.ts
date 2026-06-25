@@ -2,12 +2,12 @@ import { Transaction, Category, Budget, AppData } from './types';
 
 // Initial Seed Data
 export const INITIAL_CATEGORIES: Category[] = [
-  { id: 1, name: 'Salário', type: 'RECEITA', color: '#10b981', fixed: true },
-  { id: 2, name: 'Alimentação', type: 'DESPESA', color: '#ef4444', fixed: false },
-  { id: 3, name: 'Transporte', type: 'DESPESA', color: '#f59e0b', fixed: false },
-  { id: 4, name: 'Moradia', type: 'DESPESA', color: '#3b82f6', fixed: true },
-  { id: 5, name: 'Lazer', type: 'DESPESA', color: '#8b5cf6', fixed: false },
-  { id: 6, name: 'Fornecedores', type: 'DESPESA', color: '#6366f1', fixed: false },
+  { id: '1', name: 'Salário', type: 'RECEITA', color: '#10b981', fixed: true },
+  { id: '2', name: 'Alimentação', type: 'DESPESA', color: '#ef4444', fixed: false },
+  { id: '3', name: 'Transporte', type: 'DESPESA', color: '#f59e0b', fixed: false },
+  { id: '4', name: 'Moradia', type: 'DESPESA', color: '#3b82f6', fixed: true },
+  { id: '5', name: 'Lazer', type: 'DESPESA', color: '#8b5cf6', fixed: false },
+  { id: '6', name: 'Fornecedores', type: 'DESPESA', color: '#6366f1', fixed: false },
 ];
 
 export const INITIAL_DATA: AppData = {
@@ -32,7 +32,19 @@ export const loadData = (): AppData => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      // Merge with initial data structure to ensure new fields exist in old saves
+      // Migrate legacy numbers to strings
+      if (parsed.categories) {
+        parsed.categories = parsed.categories.map((c: any) => ({ ...c, id: String(c.id) }));
+      }
+      if (parsed.transactions) {
+        parsed.transactions = parsed.transactions.map((t: any) => ({ ...t, id: String(t.id), category: String(t.category) }));
+      }
+      if (parsed.budgets) {
+        parsed.budgets = parsed.budgets.map((b: any) => ({ ...b, id: String(b.id), category: String(b.category) }));
+      }
+      if (parsed.suppliers) {
+        parsed.suppliers = parsed.suppliers.map((s: any) => ({ ...s, id: String(s.id), categoryId: String(s.categoryId) }));
+      }
       return { ...INITIAL_DATA, ...parsed };
     }
     return INITIAL_DATA;
@@ -68,8 +80,8 @@ export const getMonthName = (monthIndex: number) => { // 0-11
   return names[monthIndex] || '';
 };
 
-export const generateId = (items: { id: number }[]) => {
-  return items.length > 0 ? Math.max(...items.map(i => i.id)) + 1 : 1;
+export const generateId = () => {
+  return crypto.randomUUID();
 };
 
 // Calculation Helpers

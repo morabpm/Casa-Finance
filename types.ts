@@ -11,18 +11,18 @@ export interface Attachment {
 }
 
 export interface Transaction {
-  id: number;
+  id: string;
   date: string; // YYYY-MM-DD
   description: string;
   amount: number;
-  category: number; // ID reference
+  category: string; // ID reference
   type: TransactionType;
   status: TransactionStatus;
   attachments?: Attachment[];
 }
 
 export interface Category {
-  id: number;
+  id: string;
   name: string;
   type: TransactionType;
   color: string;
@@ -30,22 +30,22 @@ export interface Category {
 }
 
 export interface Budget {
-  id: number;
-  category: number; // ID reference
+  id: string;
+  category: string; // ID reference
   amount: number;
   month: number;
   year: number;
 }
 
 export interface Supplier {
-  id: number;
+  id: string;
   name: string;
   cnpj: string;
   email: string;
   whatsapp: string;
   pixKey: string;
   pixType: 'CPF' | 'CNPJ' | 'EMAIL' | 'TELEFONE' | 'ALEATORIA';
-  categoryId: number;
+  categoryId: string;
   description: string;
 }
 

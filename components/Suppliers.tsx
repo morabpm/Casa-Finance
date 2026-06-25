@@ -3,19 +3,26 @@ import { Plus, Edit2, Trash2, Search, Truck, MessageCircle, Copy, Mail } from 'l
 import { Supplier, Category } from '../types';
 import { generateId } from '../utils';
 import { Modal } from './ui/Modal';
+import { useConfirm } from '../context/ConfirmContext';
+import { useToast } from '../context/ToastContext';
 
 interface SuppliersProps {
   suppliers: Supplier[];
   categories: Category[];
   onAdd: (s: Supplier) => void;
   onEdit: (s: Supplier) => void;
-  onDelete: (id: number) => void;
+  onDelete: (id: string) => void;
 }
 
 export const Suppliers: React.FC<SuppliersProps> = ({ suppliers, categories, onAdd, onEdit, onDelete }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterCategory, setFilterCategory] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [cnpjError, setCnpjError] = useState<string | null>(null);
+
+  const { confirm } = useConfirm();
+  const { showToast } = useToast();
 
   const [formData, setFormData] = useState<Partial<Supplier>>({
     name: '',
@@ -24,14 +31,17 @@ export const Suppliers: React.FC<SuppliersProps> = ({ suppliers, categories, onA
     whatsapp: '',
     pixKey: '',
     pixType: 'CNPJ',
-    categoryId: 0,
+    categoryId: '',
     description: ''
   });
 
-  const filteredSuppliers = suppliers.filter(s => 
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredSuppliers = suppliers
+    .filter(s => 
+      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.description.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .filter(s => filterCategory ? s.categoryId === filterCategory : true)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const handleOpenModal = (s?: Supplier) => {
     if (s) {
@@ -46,26 +56,46 @@ export const Suppliers: React.FC<SuppliersProps> = ({ suppliers, categories, onA
         whatsapp: '',
         pixKey: '',
         pixType: 'CNPJ',
-        categoryId: categories[0]?.id || 0,
+        categoryId: categories[0]?.id || '',
         description: ''
       });
     }
+    setCnpjError(null);
     setIsModalOpen(true);
+  };
+
+  const handleCnpjBlur = () => {
+    if (!formData.cnpj) {
+      setCnpjError(null);
+      return;
+    }
+    const digits = formData.cnpj.replace(/\D/g, '');
+    if (digits.length !== 14) {
+      setCnpjError('O CNPJ deve ter exatamente 14 dígitos.');
+    } else {
+      setCnpjError(null);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (cnpjError) {
+      showToast('Por favor, corrija os erros no formulário antes de salvar.', 'error');
+      return;
+    }
     if (editingId) {
       onEdit({ ...formData, id: editingId } as Supplier);
+      showToast('Fornecedor atualizado.', 'success');
     } else {
-      onAdd({ ...formData, id: generateId(suppliers.map(s => ({ id: s.id }))) } as Supplier);
+      onAdd({ ...formData, id: generateId() } as Supplier);
+      showToast('Fornecedor adicionado.', 'success');
     }
     setIsModalOpen(false);
   };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    alert('Copiado para a área de transferência!');
+    showToast('Copiado para a área de transferência!', 'success');
   };
 
   const formatWhatsApp = (number: string) => {
@@ -91,6 +121,16 @@ export const Suppliers: React.FC<SuppliersProps> = ({ suppliers, categories, onA
               onChange={e => setSearchTerm(e.target.value)}
             />
           </div>
+          <select 
+            className="rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm dark:text-white p-2"
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+          >
+            <option value="">Todas Categorias</option>
+            {categories.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
           <button 
             onClick={() => handleOpenModal()}
             className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
@@ -162,7 +202,13 @@ export const Suppliers: React.FC<SuppliersProps> = ({ suppliers, categories, onA
                     <button onClick={() => handleOpenModal(supplier)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded dark:hover:bg-blue-900/20">
                       <Edit2 size={16} />
                     </button>
-                    <button onClick={() => onDelete(supplier.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded dark:hover:bg-red-900/20">
+                    <button onClick={() => confirm({
+                      message: 'Tem certeza que deseja excluir este fornecedor?',
+                      onConfirm: () => {
+                        onDelete(supplier.id);
+                        showToast('Fornecedor excluído com sucesso.', 'success');
+                      }
+                    })} className="p-1.5 text-red-600 hover:bg-red-50 rounded dark:hover:bg-red-900/20">
                       <Trash2 size={16} />
                     </button>
                  </div>
@@ -196,19 +242,24 @@ export const Suppliers: React.FC<SuppliersProps> = ({ suppliers, categories, onA
               <input 
                 type="text" 
                 placeholder="00.000.000/0000-00"
-                className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2 text-sm dark:text-white"
+                className={`w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2 text-sm dark:text-white ${cnpjError ? 'border-red-500 ring-1 ring-red-500' : ''}`}
                 value={formData.cnpj}
-                onChange={e => setFormData({...formData, cnpj: e.target.value})}
+                onChange={e => {
+                  setFormData({...formData, cnpj: e.target.value});
+                  if (cnpjError) setCnpjError(null);
+                }}
+                onBlur={handleCnpjBlur}
               />
+              {cnpjError && <p className="text-red-500 text-xs mt-1">{cnpjError}</p>}
             </div>
              <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Categoria</label>
               <select 
                 className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2 text-sm dark:text-white"
                 value={formData.categoryId}
-                onChange={e => setFormData({...formData, categoryId: parseInt(e.target.value)})}
+                onChange={e => setFormData({...formData, categoryId: e.target.value})}
               >
-                <option value={0}>Selecione...</option>
+                <option value="">Selecione...</option>
                 {categories.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
@@ -277,7 +328,7 @@ export const Suppliers: React.FC<SuppliersProps> = ({ suppliers, categories, onA
              />
           </div>
 
-          <button type="submit" className="w-full bg-brand-600 hover:bg-brand-700 text-white font-medium py-2 rounded-md transition-colors mt-4">
+          <button type="submit" disabled={!!cnpjError} className="w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-2 rounded-md transition-colors mt-4">
             Salvar Fornecedor
           </button>
         </form>
