@@ -4,6 +4,7 @@ import { AppData, UserProfile } from '../types';
 import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
 import { migrateData } from '../utils';
+import { Logo } from './Logo';
 
 interface SettingsProps {
   data: AppData;
@@ -163,69 +164,79 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
       
       {activeTab === 'profile' && (
         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 animate-in slide-in-from-left-4 duration-300">
-          <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Perfil do Operador</h3>
-          <form onSubmit={handleProfileSubmit} className="space-y-4 max-w-lg">
-             {profileError && (
-               <div className="p-3 bg-red-100 text-red-700 rounded-md text-sm">
-                 {profileError}
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-6">Perfil do Operador</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
+            <form onSubmit={handleProfileSubmit} className="space-y-4 md:col-span-2">
+               {profileError && (
+                 <div className="p-3 bg-red-100 text-red-700 rounded-md text-sm">
+                   {profileError}
+                 </div>
+               )}
+               <div>
+                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome Completo</label>
+                 <input 
+                   type="text" 
+                   required
+                   className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2 text-sm dark:text-white"
+                   value={profileForm.name}
+                   onChange={e => {
+                     setProfileForm({...profileForm, name: e.target.value});
+                     if (profileError) setProfileError(null);
+                   }}
+                 />
                </div>
-             )}
-             <div>
-               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome Completo</label>
-               <input 
-                 type="text" 
-                 required
-                 className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2 text-sm dark:text-white"
-                 value={profileForm.name}
-                 onChange={e => {
-                   setProfileForm({...profileForm, name: e.target.value});
-                   if (profileError) setProfileError(null);
-                 }}
-               />
-             </div>
-             <div>
-               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
-               <input 
-                 type="email" 
-                 required
-                 className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2 text-sm dark:text-white"
-                 value={profileForm.email}
-                 onChange={e => {
-                   setProfileForm({...profileForm, email: e.target.value});
-                   if (profileError) setProfileError(null);
-                 }}
-               />
-             </div>
-             <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cargo / Função</label>
-                  <input 
-                    type="text" 
-                    className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2 text-sm dark:text-white"
-                    value={profileForm.role}
-                    onChange={e => setProfileForm({...profileForm, role: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome da Empresa</label>
-                  <input 
-                    type="text" 
-                    className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2 text-sm dark:text-white"
-                    value={profileForm.companyName}
-                    onChange={e => setProfileForm({...profileForm, companyName: e.target.value})}
-                  />
-                </div>
-             </div>
-             
-             <div className="pt-4">
-               <button 
-                 type="submit" 
-                 className={`flex items-center gap-2 px-6 py-2 rounded-md text-white font-medium transition-colors ${saveStatus === 'saved' ? 'bg-green-600' : 'bg-brand-600 hover:bg-brand-700'}`}
-               >
-                 {saveStatus === 'saved' ? <><Check size={18} /> Salvo!</> : <><Save size={18} /> Salvar Alterações</>}
-               </button>
-             </div>
-          </form>
+               <div>
+                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                 <input 
+                   type="email" 
+                   required
+                   className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2 text-sm dark:text-white"
+                   value={profileForm.email}
+                   onChange={e => {
+                     setProfileForm({...profileForm, email: e.target.value});
+                     if (profileError) setProfileError(null);
+                   }}
+                 />
+               </div>
+               <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cargo / Função</label>
+                    <input 
+                      type="text" 
+                      className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2 text-sm dark:text-white"
+                      value={profileForm.role}
+                      onChange={e => setProfileForm({...profileForm, role: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome da Empresa</label>
+                    <input 
+                      type="text" 
+                      className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2 text-sm dark:text-white"
+                      value={profileForm.companyName}
+                      onChange={e => setProfileForm({...profileForm, companyName: e.target.value})}
+                    />
+                  </div>
+               </div>
+               
+               <div className="pt-4">
+                 <button 
+                   type="submit" 
+                   className={`flex items-center gap-2 px-6 py-2 rounded-md text-white font-medium transition-colors ${saveStatus === 'saved' ? 'bg-green-600' : 'bg-brand-600 hover:bg-brand-700'}`}
+                 >
+                   {saveStatus === 'saved' ? <><Check size={18} /> Salvo!</> : <><Save size={18} /> Salvar Alterações</>}
+                 </button>
+               </div>
+            </form>
+            <div className="flex flex-col items-center justify-center p-6 bg-slate-50 dark:bg-slate-900/30 rounded-xl border border-gray-100 dark:border-gray-700/50">
+              <Logo variant="full" size={120} />
+              <div className="mt-4 text-center">
+                <p className="text-xs text-gray-400 dark:text-gray-500 font-mono">Licenciado para:</p>
+                <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mt-1">{profileForm.name || 'Usuário'}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{profileForm.companyName || 'Pro Plan'}</p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
