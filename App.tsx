@@ -14,11 +14,12 @@ import {
   Target,
   FileBarChart,
   Search,
-  LogOut
+  LogOut,
+  BookOpen
 } from 'lucide-react';
 
 import { AppData, Transaction, Category, Budget, DateFilter, Supplier, UserProfile, Goal } from './types';
-import { loadData, saveData, INITIAL_DATA, createLog, migrateData, formatCurrency } from './utils';
+import { INITIAL_DATA, createLog, formatCurrency } from './utils';
 
 // Views
 import { Dashboard } from './components/Dashboard';
@@ -31,28 +32,36 @@ import { Goals } from './components/Goals';
 import { Reports } from './components/Reports';
 import { CommandPalette } from './components/CommandPalette';
 import { Logo } from './components/Logo';
-import { Login } from './components/Login';
+import { References } from './components/References';
+
+// Auth & Multi-user isolation
+import {
+  LocalUser,
+  logoutUser,
+  getCurrentUser,
+  loadUserData,
+  saveUserData,
+  exportUserData,
+  importUserData,
+} from './auth';
+import { LoginScreen } from './components/auth/LoginScreen';
 
 // Contexts
-import { ToastProvider } from './context/ToastContext';
+import { ToastProvider, useToast } from './context/ToastContext';
 import { ConfirmProvider } from './context/ConfirmContext';
 
 function AppLayout() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   // Authentication State
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem('casa_finance_auth') === 'true';
+  const [currentUser, setCurrentUser] = useState<LocalUser | null>(() => getCurrentUser());
+
+  // State Management - load specific user data safely
+  const [data, setData] = useState<AppData>(() => {
+    return loadUserData(currentUser ? currentUser.id : 'default');
   });
 
-  const handleLogout = () => {
-    localStorage.removeItem('casa_finance_auth');
-    setIsAuthenticated(false);
-    navigate('/');
-  };
-
-  // State Management
-  const [data, setData] = useState<AppData>(INITIAL_DATA);
   const [isDark, setIsDark] = useState(() => {
     const saved = localStorage.getItem('casa_finance_theme');
     if (saved) return saved === 'dark';
@@ -67,16 +76,19 @@ function AppLayout() {
     year: new Date().getFullYear(),
   });
 
-  // Initialization
+  // Load correct user data when user changes
   useEffect(() => {
-    const loaded = loadData();
-    setData(loaded);
-  }, []);
+    if (currentUser) {
+      setData(loadUserData(currentUser.id));
+    }
+  }, [currentUser?.id]);
 
-  // Persist Data changes
+  // Persist specific user data on changes
   useEffect(() => {
-    saveData(data);
-  }, [data]);
+    if (currentUser) {
+      saveUserData(currentUser.id, data);
+    }
+  }, [data, currentUser?.id]);
 
   // Dark Mode Toggle Effect
   useEffect(() => {
@@ -100,6 +112,11 @@ function AppLayout() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [navigate]);
+
+  // Render LoginScreen conditionally after hooks have run
+  if (!currentUser) {
+    return <LoginScreen onLogin={(user) => setCurrentUser(user)} />;
+  }
 
   const toggleTheme = () => {
     const next = !isDark;
@@ -257,59 +274,25 @@ function AppLayout() {
   const updateProfile = (profile: UserProfile) => setData(prev => ({ ...prev, userProfile: profile }));
 
   const handleImport = (raw: any) => {
-    const migrated = migrateData(raw);
-    setData(migrated);
+    importUserData(currentUser.id, raw);
+    setData(loadUserData(currentUser.id));
+    showToast('Backup restaurado com sucesso!', 'success');
   };
 
-  if (!isAuthenticated) {
-    return (
-      <div className="relative min-h-screen w-full flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4 overflow-y-auto">
-        {/* Beautiful simulated dashboard layout with dynamic high blur */}
-        <div className="absolute inset-0 filter blur-2xl opacity-40 dark:opacity-20 pointer-events-none scale-105 select-none transition-opacity duration-500">
-          <div className="flex h-full w-full">
-            {/* Sidebar Column */}
-            <div className="w-64 bg-slate-200 dark:bg-slate-800 border-r border-slate-300 dark:border-slate-700 h-full p-6 space-y-6 flex flex-col justify-between">
-              <div className="space-y-6">
-                <div className="h-10 bg-slate-300 dark:bg-slate-700 rounded-lg w-2/3" />
-                <div className="space-y-3">
-                  <div className="h-11 bg-slate-300 dark:bg-slate-700 rounded-lg" />
-                  <div className="h-11 bg-slate-300 dark:bg-slate-700 rounded-lg" />
-                  <div className="h-11 bg-slate-300 dark:bg-slate-700 rounded-lg" />
-                  <div className="h-11 bg-slate-300 dark:bg-slate-700 rounded-lg" />
-                </div>
-              </div>
-              <div className="h-16 bg-slate-300 dark:bg-slate-700 rounded-lg" />
-            </div>
-
-            {/* Main Page Area */}
-            <div className="flex-1 p-8 space-y-8 bg-slate-50 dark:bg-slate-900">
-              <div className="flex justify-between items-center">
-                <div className="h-10 bg-slate-300 dark:bg-slate-700 rounded-lg w-1/4" />
-                <div className="h-10 bg-slate-300 dark:bg-slate-700 rounded-lg w-1/6" />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="h-32 bg-slate-200 dark:bg-slate-800 rounded-xl border border-slate-300 dark:border-slate-700" />
-                <div className="h-32 bg-slate-200 dark:bg-slate-800 rounded-xl border border-slate-300 dark:border-slate-700" />
-                <div className="h-32 bg-slate-200 dark:bg-slate-800 rounded-xl border border-slate-300 dark:border-slate-700" />
-                <div className="h-32 bg-slate-200 dark:bg-slate-800 rounded-xl border border-slate-300 dark:border-slate-700" />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="col-span-2 h-80 bg-slate-200 dark:bg-slate-800 rounded-xl border border-slate-300 dark:border-slate-700" />
-                <div className="h-80 bg-slate-200 dark:bg-slate-800 rounded-xl border border-slate-300 dark:border-slate-700" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Ambient subtle decorative light orbs on background */}
-        <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-brand-400/20 blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full bg-purple-400/20 blur-3xl pointer-events-none" />
-
-        {/* Login Component overlay */}
-        <Login onLoginSuccess={() => setIsAuthenticated(true)} />
-      </div>
+  const handleExport = () => {
+    const exportData = exportUserData(currentUser.id);
+    if (!exportData) return;
+    const blob = new Blob(
+      [JSON.stringify({ ...exportData, exportedAt: new Date().toISOString(), user: currentUser.name }, null, 2)],
+      { type: 'application/json' }
     );
-  }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `casa-finance-backup-${currentUser.name.toLowerCase()}-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   // Navigation Links Configuration
   const navLinks = [
@@ -320,6 +303,9 @@ function AppLayout() {
     { to: "/goals", icon: <Target size={20} />, label: "Metas" },
     { to: "/suppliers", icon: <Truck size={20} />, label: "Fornecedores" },
     { to: "/reports", icon: <FileBarChart size={20} />, label: "Relatórios" },
+    ...(currentUser.id === 'user_sucesso' ? [
+      { to: "/references", icon: <BookOpen size={20} />, label: "Referência" }
+    ] : []),
     { to: "/settings", icon: <SettingsIcon size={20} />, label: "Configurações" },
   ];
 
@@ -354,16 +340,22 @@ function AppLayout() {
 
         <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
           <div className="flex items-center gap-3 px-4 py-2">
-             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-brand-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold shadow-md">
-               {data.userProfile?.name ? data.userProfile.name.substring(0,2).toUpperCase() : 'US'}
+             <div 
+               className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md"
+               style={{ backgroundColor: currentUser.color }}
+             >
+               {currentUser.name[0].toUpperCase()}
              </div>
              <div className="flex-1 min-w-0">
-               <p className="text-sm font-medium truncate">{data.userProfile?.name || 'Usuário'}</p>
-               <p className="text-xs text-gray-500 truncate">{data.userProfile?.companyName || 'Pro Plan'}</p>
+               <p className="text-sm font-semibold truncate">{currentUser.name}</p>
+               <p className="text-xs text-gray-500 truncate">Usuário: {currentUser.username}</p>
              </div>
           </div>
           <button 
-            onClick={handleLogout}
+            onClick={() => {
+              logoutUser();
+              setCurrentUser(null);
+            }}
             className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-sm font-medium transition-colors text-left"
           >
             <LogOut size={20} />
@@ -398,9 +390,24 @@ function AppLayout() {
                  </NavLink>
                ))}
            </div>
-           <div className="pt-4 border-t border-gray-150 dark:border-gray-700">
+           <div className="pt-4 border-t border-gray-150 dark:border-gray-700 space-y-2">
+             <div className="flex items-center gap-3 px-4 py-2">
+                <div 
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md"
+                  style={{ backgroundColor: currentUser.color }}
+                >
+                  {currentUser.name[0].toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate">{currentUser.name}</p>
+                  <p className="text-xs text-gray-500 truncate text-left">Usuário: {currentUser.username}</p>
+                </div>
+             </div>
              <button 
-               onClick={handleLogout}
+               onClick={() => {
+                 logoutUser();
+                 setCurrentUser(null);
+               }}
                className="w-full flex items-center gap-3 px-4 py-3 rounded-md text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-sm font-medium transition-colors text-left"
              >
                <LogOut size={20} />
@@ -438,6 +445,32 @@ function AppLayout() {
             >
               {isDark ? <Sun size={20} /> : <Moon size={20} />}
             </button>
+
+            {/* Separator */}
+            <div className="h-6 w-[1px] bg-gray-200 dark:bg-gray-700"></div>
+
+            {/* Active user profile info on topbar header */}
+            <div className="flex items-center gap-2">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md"
+                style={{ backgroundColor: currentUser.color }}
+              >
+                {currentUser.name[0].toUpperCase()}
+              </div>
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 hidden sm:block">
+                {currentUser.name}
+              </span>
+              <button
+                onClick={() => {
+                  logoutUser();
+                  setCurrentUser(null);
+                }}
+                title="Sair"
+                className="p-2 rounded-lg text-gray-500 hover:text-red-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-colors ml-1"
+              >
+                <LogOut size={18} />
+              </button>
+            </div>
           </div>
         </header>
 
@@ -499,10 +532,15 @@ function AppLayout() {
               <Route path="/reports" element={
                 <Reports data={data} />
               } />
+              {currentUser.id === 'user_sucesso' && (
+                <Route path="/references" element={<References />} />
+              )}
               <Route path="/settings" element={
                 <Settings 
                   data={data} 
+                  currentUser={currentUser}
                   onImport={handleImport} 
+                  onExport={handleExport}
                   onUpdateProfile={updateProfile}
                 />
               } />

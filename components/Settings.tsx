@@ -5,14 +5,23 @@ import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
 import { migrateData } from '../utils';
 import { Logo } from './Logo';
+import { LocalUser } from '../auth';
 
 interface SettingsProps {
   data: AppData;
-  onImport: (data: AppData) => void;
+  currentUser: LocalUser;
+  onImport: (raw: any) => void;
+  onExport: () => void;
   onUpdateProfile: (profile: UserProfile) => void;
 }
 
-export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProfile }) => {
+export const Settings: React.FC<SettingsProps> = ({ 
+  data, 
+  currentUser, 
+  onImport, 
+  onExport, 
+  onUpdateProfile 
+}) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'data' | 'history'>('profile');
   const [profileForm, setProfileForm] = useState<UserProfile>(data.userProfile || {
     name: '', email: '', role: '', companyName: ''
@@ -23,22 +32,6 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
   
   const { confirm } = useConfirm();
   const { showToast } = useToast();
-
-  const handleExport = () => {
-    const exportData = {
-      ...data,
-      version: '2.0',
-      exportedAt: new Date().toISOString()
-    };
-    
-    const jsonString = `data:text/json;chatset=utf-8,${encodeURIComponent(
-      JSON.stringify(exportData, null, 2)
-    )}`;
-    const link = document.createElement("a");
-    link.href = jsonString;
-    link.download = `casa_finance_backup_${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-  };
 
   const handleExportCSV = () => {
     // CSV Header
@@ -64,12 +57,12 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
     
     const link = document.createElement("a");
     link.href = url;
-    link.download = `casa_finance_export_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `casa-finance-export-${currentUser.name.toLowerCase()}-${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
 
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileReader = new FileReader();
     if (e.target.files && e.target.files[0]) {
       fileReader.readAsText(e.target.files[0], "UTF-8");
@@ -77,16 +70,15 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
         try {
           if (event.target?.result) {
             const parsed = JSON.parse(event.target.result as string);
-            const migrated = migrateData(parsed);
             
             confirm({
-              message: "Isso substituirá TODOS os dados atuais (transações, categorias, fornecedores, etc). Continuar?",
+              message: `Isso substituirá TODOS os dados atuais do usuário "${currentUser.name}". Continuar?`,
               onConfirm: () => {
-                onImport(migrated);
+                onImport(parsed);
+                const migrated = migrateData(parsed);
                 if (migrated.userProfile) {
                   setProfileForm(migrated.userProfile);
                 }
-                showToast("Backup restaurado com sucesso!", "success");
               }
             });
           }
@@ -138,35 +130,56 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-         <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Configurações</h2>
-         
-         <div className="flex p-1 bg-gray-200 dark:bg-gray-700 rounded-lg overflow-x-auto max-w-full">
-           <button 
-             onClick={() => setActiveTab('profile')}
-             className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'profile' ? 'bg-white dark:bg-gray-600 shadow-sm text-brand-600 dark:text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}
-           >
-             <User size={16} /> Perfil
-           </button>
-           <button 
-             onClick={() => setActiveTab('data')}
-             className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'data' ? 'bg-white dark:bg-gray-600 shadow-sm text-brand-600 dark:text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}
-           >
-             <Database size={16} /> Dados & Backup
-           </button>
-           <button 
-             onClick={() => setActiveTab('history')}
-             className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'history' ? 'bg-white dark:bg-gray-600 shadow-sm text-brand-600 dark:text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}
-           >
-             <History size={16} /> Histórico
-           </button>
-         </div>
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Configurações</h2>
+          
+          <div className="flex p-1 bg-gray-200 dark:bg-gray-700 rounded-lg overflow-x-auto max-w-full">
+            <button 
+              onClick={() => setActiveTab('profile')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'profile' ? 'bg-white dark:bg-gray-600 shadow-sm text-brand-600 dark:text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}
+            >
+              <User size={16} /> Perfil
+            </button>
+            <button 
+              onClick={() => setActiveTab('data')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'data' ? 'bg-white dark:bg-gray-600 shadow-sm text-brand-600 dark:text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}
+            >
+              <Database size={16} /> Dados & Backup
+            </button>
+            <button 
+              onClick={() => setActiveTab('history')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'history' ? 'bg-white dark:bg-gray-600 shadow-sm text-brand-600 dark:text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}
+            >
+              <History size={16} /> Histórico
+            </button>
+          </div>
       </div>
       
       {activeTab === 'profile' && (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 animate-in slide-in-from-left-4 duration-300">
-          <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-6">Perfil do Operador</h3>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 animate-in slide-in-from-left-4 duration-300 space-y-6">
+          
+          {/* Conta Atual Logada (Read-only) */}
+          <div className="border-b border-gray-100 dark:border-gray-700 pb-5">
+            <h4 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Sua Conta Local</h4>
+            <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-150 dark:border-gray-700">
+              <div
+                className="w-12 h-12 rounded-full flex items-center justify-center text-white text-xl font-bold shadow-sm"
+                style={{ backgroundColor: currentUser.color }}
+              >
+                {currentUser.name[0].toUpperCase()}
+              </div>
+              <div>
+                <p className="font-bold text-gray-900 dark:text-white">{currentUser.name}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Usuário do Sistema: {currentUser.username}</p>
+              </div>
+              <div className="ml-auto px-3 py-1 bg-brand-50 dark:bg-brand-950/30 text-brand-600 dark:text-brand-400 text-xs font-semibold rounded-lg border border-brand-100 dark:border-brand-900/40">
+                Ativo
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
             <form onSubmit={handleProfileSubmit} className="space-y-4 md:col-span-2">
+               <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Perfil do Operador</h4>
                {profileError && (
                  <div className="p-3 bg-red-100 text-red-700 rounded-md text-sm">
                    {profileError}
@@ -177,7 +190,7 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
                  <input 
                    type="text" 
                    required
-                   className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2 text-sm dark:text-white"
+                   className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2 text-sm dark:text-white focus:ring-1 focus:ring-brand-500 outline-none"
                    value={profileForm.name}
                    onChange={e => {
                      setProfileForm({...profileForm, name: e.target.value});
@@ -190,7 +203,7 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
                  <input 
                    type="email" 
                    required
-                   className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2 text-sm dark:text-white"
+                   className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2 text-sm dark:text-white focus:ring-1 focus:ring-brand-500 outline-none"
                    value={profileForm.email}
                    onChange={e => {
                      setProfileForm({...profileForm, email: e.target.value});
@@ -203,7 +216,7 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cargo / Função</label>
                     <input 
                       type="text" 
-                      className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2 text-sm dark:text-white"
+                      className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2 text-sm dark:text-white focus:ring-1 focus:ring-brand-500 outline-none"
                       value={profileForm.role}
                       onChange={e => setProfileForm({...profileForm, role: e.target.value})}
                     />
@@ -212,7 +225,7 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome da Empresa</label>
                     <input 
                       type="text" 
-                      className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2 text-sm dark:text-white"
+                      className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2 text-sm dark:text-white focus:ring-1 focus:ring-brand-500 outline-none"
                       value={profileForm.companyName}
                       onChange={e => setProfileForm({...profileForm, companyName: e.target.value})}
                     />
@@ -262,7 +275,7 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
 
             <div className="flex flex-col gap-3">
               <button 
-                onClick={handleExport}
+                onClick={onExport}
                 className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-md transition-colors"
               >
                 <Save size={18} /> Baixar Backup (JSON)
@@ -284,14 +297,14 @@ export const Settings: React.FC<SettingsProps> = ({ data, onImport, onUpdateProf
             </div>
             <p className="text-gray-600 dark:text-gray-300 text-sm mb-6">
               Restaure seus dados a partir de um arquivo de backup (.json). 
-              <span className="text-red-500 font-semibold block mt-1">Atenção: Isso substituirá os dados atuais.</span>
+              <span className="text-red-500 font-semibold block mt-1">Atenção: Isso substituirá os dados de {currentUser.name}.</span>
             </p>
             
             <div className="relative border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer group">
                <input 
                   type="file" 
                   accept=".json"
-                  onChange={handleImport}
+                  onChange={handleImportFile}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                />
                <div className="flex flex-col items-center">
