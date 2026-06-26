@@ -189,10 +189,15 @@ export const References: React.FC = () => {
         </div>
       </div>
 
+      {/* Mobile scroll hint */}
+      <p className="text-xs text-gray-400 dark:text-gray-500 block md:hidden text-right pr-1">
+        * Deslize para o lado para ver a tabela completa ↔
+      </p>
+
       {/* Main Table */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-150 dark:border-gray-700/80 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <div className="overflow-x-auto pb-2">
+          <table className="w-full text-left border-collapse min-w-[700px]">
             <thead>
               <tr className="bg-red-600 text-white font-bold text-xs uppercase tracking-wider">
                 <th className="py-3 px-4 sm:px-6">Inquilino</th>
