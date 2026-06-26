@@ -30,9 +30,9 @@ export const Logo: React.FC<LogoProps> = ({ variant = 'full', className = '', si
           <stop offset="60%" stopColor="#4caf50" />
           <stop offset="100%" stopColor="#81c784" />
         </linearGradient>
-        <shadow id="logoShadow">
+        <filter id="logoShadow">
           <feDropShadow dx="2" dy="2" stdDeviation="3" floodOpacity="0.1" />
-        </shadow>
+        </filter>
       </defs>
 
       {/* House Roof & Chimney */}

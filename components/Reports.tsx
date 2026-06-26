@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Download, BarChart2, PieChart, Calendar } from 'lucide-react';
+import { Download, BarChart2, PieChart, Calendar, Printer } from 'lucide-react';
 import { AppData } from '../types';
 import { calculateTotals, getMonthName, formatCurrency } from '../utils';
 
@@ -141,10 +141,42 @@ export const Reports: React.FC<ReportsProps> = ({ data }) => {
         </div>
       </div>
 
+      {/* Cabeçalho exclusivo para o arquivo impresso (oculto na tela) */}
+      <div className="print-header hidden mb-6 pb-4 border-b-2 border-red-600">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-black text-gray-900" style={{ color: '#111827' }}>Casa Finance Pro</h1>
+            <p className="text-xs text-gray-500 font-medium mt-0.5">Gestão e Planejamento Financeiro de Imóveis</p>
+          </div>
+          <div className="text-right">
+            <span className="text-[10px] text-gray-400 block font-bold uppercase tracking-wider">Relatório</span>
+            <span className="text-sm font-black text-red-600 block">
+              {activeTab === 'cashflow' ? 'Fluxo de Caixa Anual' : activeTab === 'categories' ? 'Relatório por Categorias' : 'Análise de Gastos Fixos'}
+            </span>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-200 text-xs text-gray-600">
+          <div>
+            <span className="text-[9px] text-gray-400 block font-bold uppercase tracking-wider">Período Selecionado</span>
+            <span className="font-semibold text-gray-800">
+              {activeTab === 'cashflow' ? `Ano de ${filterYear}` : `${getMonthName(filterMonth)} de ${filterYear}`}
+            </span>
+          </div>
+          <div>
+            <span className="text-[9px] text-gray-400 block font-bold uppercase tracking-wider">Data de Emissão</span>
+            <span className="font-semibold text-gray-800">{new Date().toLocaleString('pt-BR')}</span>
+          </div>
+          <div className="text-right">
+            <span className="text-[9px] text-gray-400 block font-bold uppercase tracking-wider">Autenticidade</span>
+            <span className="text-emerald-600 font-bold">Relatório do Sistema</span>
+          </div>
+        </div>
+      </div>
+
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
         {/* Header de Filtros */}
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
-          <div className="flex gap-2">
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-gray-50 dark:bg-gray-800/50">
+          <div className="flex gap-2 w-full sm:w-auto">
             {activeTab !== 'cashflow' && (
               <select 
                 className="form-select rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm text-sm"
@@ -167,14 +199,22 @@ export const Reports: React.FC<ReportsProps> = ({ data }) => {
             </select>
           </div>
           
-          {activeTab === 'cashflow' && (
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            {activeTab === 'cashflow' && (
+              <button 
+                onClick={exportCSV}
+                className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded text-sm transition-colors"
+              >
+                <Download size={16} /> Exportar CSV
+              </button>
+            )}
             <button 
-              onClick={exportCSV}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded text-sm transition-colors"
+              onClick={() => window.print()}
+              className="flex items-center gap-2 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded text-sm transition-colors shadow-sm"
             >
-              <Download size={16} /> Exportar CSV
+              <Printer size={16} /> Imprimir PDF
             </button>
-          )}
+          </div>
         </div>
 
         {/* Tabelas Baseadas na Aba */}

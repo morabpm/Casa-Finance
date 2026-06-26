@@ -380,7 +380,9 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
                           <div className="flex items-center gap-2">
                             <span className="truncate max-w-[200px]" title={t.description}>{t.description}</span>
                             {t.notes && (
-                              <StickyNote size={14} className="text-gray-400" title={t.notes} />
+                              <span title={t.notes}>
+                                <StickyNote size={14} className="text-gray-400" />
+                              </span>
                             )}
                             {t.attachments && t.attachments.length > 0 && (
                               <div className="flex items-center text-gray-400 dark:text-gray-500" title={`${t.attachments.length} arquivo(s) anexado(s)`}>
@@ -463,7 +465,11 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
                         <span className="text-xs text-gray-500 dark:text-gray-400 mb-1">{formatDate(t.date)}</span>
                         <div className="flex items-center gap-2">
                           <h3 className="font-semibold text-gray-900 dark:text-white line-clamp-2">{t.description}</h3>
-                          {t.notes && <StickyNote size={14} className="text-gray-400 shrink-0" title={t.notes} />}
+                          {t.notes && (
+                            <span title={t.notes}>
+                              <StickyNote size={14} className="text-gray-400 shrink-0" />
+                            </span>
+                          )}
                         </div>
                         {supplierName && (
                           <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 mt-1" title={supplierName}>

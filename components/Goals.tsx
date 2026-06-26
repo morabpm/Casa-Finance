@@ -29,7 +29,7 @@ export const Goals: React.FC<GoalsProps> = ({ goals, onAdd, onEdit, onDelete }) 
   const [depositGoal, setDepositGoal] = useState<Goal | null>(null);
   const [depositAmount, setDepositAmount] = useState<string>('');
 
-  const confirm = useConfirm();
+  const { confirm } = useConfirm();
   const { showToast } = useToast();
 
   const handleOpenModal = (goal?: Goal) => {

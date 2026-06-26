@@ -189,15 +189,10 @@ export const References: React.FC = () => {
         </div>
       </div>
 
-      {/* Mobile scroll hint */}
-      <p className="text-xs text-gray-400 dark:text-gray-500 block md:hidden text-right pr-1">
-        * Deslize para o lado para ver a tabela completa ↔
-      </p>
-
-      {/* Main Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-150 dark:border-gray-700/80 overflow-hidden">
-        <div className="overflow-x-auto pb-2">
-          <table className="w-full text-left border-collapse min-w-[700px]">
+      {/* Table View - Hidden on Mobile, Visible on Desktop */}
+      <div className="hidden md:block bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-150 dark:border-gray-700/80 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-red-600 text-white font-bold text-xs uppercase tracking-wider">
                 <th className="py-3 px-4 sm:px-6">Inquilino</th>
@@ -270,6 +265,76 @@ export const References: React.FC = () => {
             )}
           </table>
         </div>
+      </div>
+
+      {/* Cards View - Specifically Optimized for Mobile Viewports */}
+      <div className="block md:hidden space-y-3">
+        {filteredItems.length === 0 ? (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 text-center text-gray-400 dark:text-gray-500 border border-gray-150 dark:border-gray-700/80">
+            <UserCheck size={40} className="mx-auto mb-2 text-gray-300 dark:text-gray-600" />
+            Nenhuma referência encontrada.
+          </div>
+        ) : (
+          <>
+            {filteredItems.map((item) => (
+              <div 
+                key={item.id} 
+                className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-gray-150 dark:border-gray-700/80 space-y-3"
+              >
+                {/* Header: Inquilino Name */}
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider block mb-1">Inquilino</span>
+                  <span className="font-semibold text-gray-900 dark:text-white text-sm block leading-snug">
+                    {item.inquilino}
+                  </span>
+                </div>
+
+                {/* Details Row */}
+                <div className="flex justify-between items-center pt-2 border-t border-gray-100 dark:border-gray-750">
+                  <div>
+                    <span className="text-[10px] text-gray-400 dark:text-gray-500 block mb-0.5">Vencimento</span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-xs font-semibold text-gray-700 dark:text-gray-300">
+                      <Calendar size={11} />
+                      Dia {item.vencimento}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] text-gray-400 dark:text-gray-500 block mb-0.5">Valor a receber</span>
+                    <span className="font-mono font-bold text-gray-900 dark:text-white text-sm">
+                      {formatCurrencyValue(item.valorAReceber)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Actions Row */}
+                <div className="flex justify-end gap-2 pt-2 border-t border-gray-105 dark:border-gray-700/50">
+                  <button
+                    onClick={() => openEditModal(item)}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 rounded-lg transition-colors border border-blue-100 dark:border-blue-900/30"
+                  >
+                    <Edit2 size={12} />
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => handleDelete(item.id, item.inquilino)}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg transition-colors border border-rose-100 dark:border-rose-900/30"
+                  >
+                    <Trash2 size={12} />
+                    Excluir
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {/* Sticky/Bottom Summary Card */}
+            <div className="bg-red-600 text-white rounded-2xl p-4 shadow-md flex justify-between items-center">
+              <span className="font-bold text-xs uppercase tracking-wider">TOTAL REFERÊNCIAS</span>
+              <span className="font-mono font-black text-lg">
+                {formatCurrencyValue(totalReceber)}
+              </span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Modal CRUD */}
