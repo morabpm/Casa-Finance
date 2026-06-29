@@ -6,6 +6,7 @@ interface ConfirmOptions {
   message: string;
   confirmLabel?: string;
   confirmClassName?: string;
+  type?: 'danger' | 'warning' | 'info' | 'success';
   onConfirm: () => void;
 }
 
@@ -39,6 +40,7 @@ export const ConfirmProvider: React.FC<{ children: ReactNode }> = ({ children })
           message={options.message}
           confirmLabel={options.confirmLabel}
           confirmClassName={options.confirmClassName}
+          type={options.type}
           onConfirm={handleConfirm}
           onCancel={() => setIsOpen(false)}
         />

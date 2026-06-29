@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 
 import { AppData, Transaction, Category, Budget, DateFilter, Supplier, UserProfile, Goal } from './types';
-import { INITIAL_DATA, createLog, formatCurrency } from './utils';
+import { INITIAL_DATA, createLog, formatCurrency, migrateData } from './utils';
 
 // Views
 import { Dashboard } from './components/Dashboard';
@@ -54,10 +54,8 @@ function AppLayout() {
   const navigate = useNavigate();
   const { showToast } = useToast();
 
-  // Authentication State
   const [currentUser, setCurrentUser] = useState<LocalUser | null>(() => getCurrentUser());
 
-  // State Management - load specific user data safely
   const [data, setData] = useState<AppData>(() => {
     return loadUserData(currentUser ? currentUser.id : 'default');
   });
@@ -70,27 +68,23 @@ function AppLayout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   
-  // Dashboard Filter State
   const [filter, setFilter] = useState<DateFilter>({
     month: new Date().getMonth(),
     year: new Date().getFullYear(),
   });
 
-  // Load correct user data when user changes
   useEffect(() => {
     if (currentUser) {
       setData(loadUserData(currentUser.id));
     }
   }, [currentUser?.id]);
 
-  // Persist specific user data on changes
   useEffect(() => {
     if (currentUser) {
       saveUserData(currentUser.id, data);
     }
   }, [data, currentUser?.id]);
 
-  // Dark Mode Toggle Effect
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
@@ -99,7 +93,6 @@ function AppLayout() {
     }
   }, [isDark]);
 
-  // Keyboard Shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.altKey && e.key === 't') navigate('/transactions');
@@ -113,7 +106,6 @@ function AppLayout() {
     return () => window.removeEventListener('keydown', handler);
   }, [navigate]);
 
-  // Render LoginScreen conditionally after hooks have run
   if (!currentUser) {
     return <LoginScreen onLogin={(user) => setCurrentUser(user)} />;
   }
@@ -124,7 +116,6 @@ function AppLayout() {
     localStorage.setItem('casa_finance_theme', next ? 'dark' : 'light');
   };
 
-  // Handlers
   const addTransaction = (t: Transaction) => {
     const log = createLog(
       'CREATE', 'TRANSACTION', t.id,
@@ -274,8 +265,9 @@ function AppLayout() {
   const updateProfile = (profile: UserProfile) => setData(prev => ({ ...prev, userProfile: profile }));
 
   const handleImport = (raw: any) => {
-    importUserData(currentUser.id, raw);
-    setData(loadUserData(currentUser.id));
+    const migrated = migrateData(raw);
+    saveUserData(currentUser.id, migrated);
+    setData(migrated);
     showToast('Backup restaurado com sucesso!', 'success');
   };
 
@@ -294,7 +286,6 @@ function AppLayout() {
     URL.revokeObjectURL(url);
   };
 
-  // Navigation Links Configuration
   const navLinks = [
     { to: "/dashboard", icon: <LayoutDashboard size={20} />, label: "Dashboard" },
     { to: "/transactions", icon: <WalletCards size={20} />, label: "Lançamentos" },
@@ -313,7 +304,6 @@ function AppLayout() {
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden transition-colors duration-300">
       <CommandPalette isOpen={isCommandOpen} onClose={() => setIsCommandOpen(false)} data={data} />
       
-      {/* Sidebar (Desktop) */}
       <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
         <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center">
            <Logo variant="horizontal" size={32} />
@@ -364,7 +354,6 @@ function AppLayout() {
         </div>
       </aside>
 
-      {/* Mobile Header & Overlay */}
       <div className={`md:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity ${isMobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsMobileMenuOpen(false)}></div>
       
       <aside className={`md:hidden fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-800 shadow-xl transform transition-transform flex flex-col h-full ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
@@ -417,9 +406,7 @@ function AppLayout() {
          </nav>
       </aside>
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Topbar */}
         <header className="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 sm:px-6">
           <button 
             className="md:hidden p-2 text-gray-600 dark:text-gray-300"
@@ -428,7 +415,7 @@ function AppLayout() {
             <Menu size={24} />
           </button>
           
-          <div className="flex-1"></div> {/* Spacer */}
+          <div className="flex-1"></div>
           
           <div className="flex items-center gap-2 sm:gap-4">
             <button 
@@ -446,10 +433,8 @@ function AppLayout() {
               {isDark ? <Sun size={20} /> : <Moon size={20} />}
             </button>
 
-            {/* Separator */}
             <div className="h-6 w-[1px] bg-gray-200 dark:bg-gray-700"></div>
 
-            {/* Active user profile info on topbar header */}
             <div className="flex items-center gap-2">
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md"
@@ -474,7 +459,6 @@ function AppLayout() {
           </div>
         </header>
 
-        {/* Viewport */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">
             <Routes>

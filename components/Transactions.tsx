@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Search, Paperclip, X, FileText, Download, Copy, Repeat, ChevronLeft, ChevronRight, LayoutList, LayoutGrid, Truck, StickyNote } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Paperclip, X, FileText, Download, Copy, Repeat, ChevronLeft, ChevronRight, LayoutList, LayoutGrid, Truck, StickyNote, FileSpreadsheet } from 'lucide-react';
 import { Transaction, Category, TransactionType, TransactionStatus, Attachment, Supplier } from '../types';
 import { formatDate, formatCurrency, getMonthName } from '../utils';
 import { Modal } from './ui/Modal';
 import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
+import { ImportSpreadsheet } from './ImportSpreadsheet';
 
 interface TransactionsProps {
   transactions: Transaction[];
@@ -36,6 +37,10 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
   
   const { confirm } = useConfirm();
   const { showToast } = useToast();
+
+  const [activeSubTab, setActiveSubTab] = useState<'list' | 'import'>('list');
+  const currentUserId = sessionStorage.getItem('casa_finance_session');
+  const isUserCasa = currentUserId === 'user_casa';
 
   // Form State
   const [formData, setFormData] = useState<Partial<Transaction>>({
@@ -239,7 +244,40 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       
-      {/* Header & Actions */}
+      {isUserCasa && (
+        <div className="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-2 rounded-xl shadow-sm gap-2">
+          <button
+            onClick={() => setActiveSubTab('list')}
+            className={`py-2 px-4 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
+              activeSubTab === 'list'
+                ? 'bg-brand-600 text-white shadow-sm'
+                : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-300'
+            }`}
+          >
+            <LayoutList size={14} /> Lista de Lançamentos
+          </button>
+          <button
+            onClick={() => setActiveSubTab('import')}
+            className={`py-2 px-4 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
+              activeSubTab === 'import'
+                ? 'bg-brand-600 text-white shadow-sm'
+                : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-300'
+            }`}
+          >
+            <FileSpreadsheet size={14} /> Importar Planilha
+          </button>
+        </div>
+      )}
+
+      {activeSubTab === 'import' ? (
+        <ImportSpreadsheet 
+          categories={categories} 
+          onAdd={onAdd} 
+          onSuccess={() => setActiveSubTab('list')} 
+        />
+      ) : (
+        <>
+          {/* Header & Actions */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
         <h2 className="text-xl font-bold text-gray-800 dark:text-white">Lançamentos</h2>
         
@@ -549,6 +587,8 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
           </div>
         )}
       </div>
+      </>
+      )}
 
       {/* Modal Form */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? 'Editar Transação' : 'Nova Transação'}>

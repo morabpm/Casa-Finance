@@ -34,27 +34,22 @@ export const Settings: React.FC<SettingsProps> = ({
   const { showToast } = useToast();
 
   const handleExportCSV = () => {
-    // CSV Header
     const headers = ['ID', 'Data', 'Descrição', 'Categoria', 'Tipo', 'Valor', 'Status'];
-    
-    // CSV Rows
     const rows = data.transactions.map(t => {
       const categoryName = data.categories.find(c => c.id === t.category)?.name || 'Desconhecida';
       return [
         t.id,
         t.date,
-        `"${t.description.replace(/"/g, '""')}"`, // Escape quotes
+        `"${t.description.replace(/"/g, '""')}"`,
         `"${categoryName}"`,
         t.type,
         t.amount.toFixed(2),
         t.status
       ].join(',');
     });
-
     const csvContent = [headers.join(','), ...rows].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    
     const link = document.createElement("a");
     link.href = url;
     link.download = `casa-finance-export-${currentUser.name.toLowerCase()}-${new Date().toISOString().split('T')[0]}.csv`;
@@ -70,12 +65,15 @@ export const Settings: React.FC<SettingsProps> = ({
         try {
           if (event.target?.result) {
             const parsed = JSON.parse(event.target.result as string);
-            
             confirm({
-              message: `Isso substituirá TODOS os dados atuais do usuário "${currentUser.name}". Continuar?`,
+              title: "Restaurar Backup",
+              message: `Isso substituirá TODOS os dados atuais do usuário "${currentUser.name}". Tem certeza que deseja continuar com a restauração?`,
+              confirmLabel: "Restaurar Dados",
+              confirmClassName: "bg-brand-600 hover:bg-brand-700 text-white font-bold",
+              type: "warning",
               onConfirm: () => {
-                onImport(parsed);
                 const migrated = migrateData(parsed);
+                onImport(migrated);
                 if (migrated.userProfile) {
                   setProfileForm(migrated.userProfile);
                 }
@@ -121,7 +119,6 @@ export const Settings: React.FC<SettingsProps> = ({
     }
   };
 
-  // Pagination for history
   const historyPerPage = 20;
   const sortedHistory = [...(data.activityLog || [])].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   const totalPages = Math.ceil(sortedHistory.length / historyPerPage);
@@ -131,7 +128,6 @@ export const Settings: React.FC<SettingsProps> = ({
     <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Configurações</h2>
-          
           <div className="flex p-1 bg-gray-200 dark:bg-gray-700 rounded-lg overflow-x-auto max-w-full">
             <button 
               onClick={() => setActiveTab('profile')}
@@ -156,8 +152,6 @@ export const Settings: React.FC<SettingsProps> = ({
       
       {activeTab === 'profile' && (
         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 animate-in slide-in-from-left-4 duration-300 space-y-6">
-          
-          {/* Conta Atual Logada (Read-only) */}
           <div className="border-b border-gray-100 dark:border-gray-700 pb-5">
             <h4 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Sua Conta Local</h4>
             <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-150 dark:border-gray-700">
@@ -231,7 +225,6 @@ export const Settings: React.FC<SettingsProps> = ({
                     />
                   </div>
                </div>
-               
                <div className="pt-4">
                  <button 
                    type="submit" 
@@ -255,7 +248,6 @@ export const Settings: React.FC<SettingsProps> = ({
 
       {activeTab === 'data' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-300">
-          {/* Export Card */}
           <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
             <div className="flex items-center gap-3 mb-4 text-brand-600 dark:text-brand-400">
               <Download size={24} />
@@ -264,7 +256,6 @@ export const Settings: React.FC<SettingsProps> = ({
             <p className="text-gray-600 dark:text-gray-300 text-sm mb-6">
               Baixe uma cópia completa de suas transações, categorias, orçamentos e fornecedores em formato JSON.
             </p>
-            
             <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-md mb-6 text-xs text-gray-500 font-mono">
               {data.transactions?.length || 0} transações<br/>
               {data.categories?.length || 0} categorias<br/>
@@ -272,7 +263,6 @@ export const Settings: React.FC<SettingsProps> = ({
               {data.budgets?.length || 0} orçamentos<br/>
               {data.goals?.length || 0} metas
             </div>
-
             <div className="flex flex-col gap-3">
               <button 
                 onClick={onExport}
@@ -289,7 +279,6 @@ export const Settings: React.FC<SettingsProps> = ({
             </div>
           </div>
 
-          {/* Import Card */}
           <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
              <div className="flex items-center gap-3 mb-4 text-brand-600 dark:text-brand-400">
               <Upload size={24} />
@@ -299,7 +288,6 @@ export const Settings: React.FC<SettingsProps> = ({
               Restaure seus dados a partir de um arquivo de backup (.json). 
               <span className="text-red-500 font-semibold block mt-1">Atenção: Isso substituirá os dados de {currentUser.name}.</span>
             </p>
-            
             <div className="relative border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer group">
                <input 
                   type="file" 

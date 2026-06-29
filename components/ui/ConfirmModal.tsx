@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal } from './Modal';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Info, AlertCircle, CheckCircle } from 'lucide-react';
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -8,6 +8,7 @@ interface ConfirmModalProps {
   message: string;
   confirmLabel?: string;
   confirmClassName?: string;
+  type?: 'danger' | 'warning' | 'info' | 'success';
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -18,13 +19,28 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   message, 
   confirmLabel = "Excluir",
   confirmClassName = "bg-red-600 hover:bg-red-700 text-white",
+  type = 'danger',
   onConfirm, 
   onCancel 
 }) => {
+  const getIcon = () => {
+    switch (type) {
+      case 'warning':
+        return <AlertCircle className="text-amber-500 mb-4" size={48} />;
+      case 'info':
+        return <Info className="text-blue-500 mb-4" size={48} />;
+      case 'success':
+        return <CheckCircle className="text-green-500 mb-4" size={48} />;
+      case 'danger':
+      default:
+        return <AlertTriangle className="text-red-500 mb-4" size={48} />;
+    }
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={onCancel} title={title}>
       <div className="flex flex-col items-center text-center p-4">
-        <AlertTriangle className="text-red-500 mb-4" size={48} />
+        {getIcon()}
         <p className="text-gray-700 dark:text-gray-300 mb-6">{message}</p>
         <div className="flex gap-4 w-full justify-center">
           <button 
