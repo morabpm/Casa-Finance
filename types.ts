@@ -86,6 +86,12 @@ export interface AppData {
   family: string; // Legacy field, kept for compatibility
   goals: Goal[];
   activityLog: ActivityLog[];
+  // Saldo Inicial/Atual de Referência: ponto de partida real informado pelo usuário,
+  // a partir do qual o "Caixa Disponível" passa a ser calculado.
+  // Isso evita que o saldo exibido dependa do histórico acumulado completo desde o dia zero,
+  // que normalmente não bate com o extrato real do banco por causa de lançamentos retroativos ausentes.
+  initialBalance: number;
+  initialBalanceDate: string; // YYYY-MM-DD
 }
 
 export interface DateFilter {

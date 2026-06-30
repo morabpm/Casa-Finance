@@ -266,6 +266,10 @@ function AppLayout() {
 
   const updateProfile = (profile: UserProfile) => setData(prev => ({ ...prev, userProfile: profile }));
 
+  const updateBalance = (initialBalance: number, initialBalanceDate: string) => {
+    setData(prev => ({ ...prev, initialBalance, initialBalanceDate }));
+  };
+
   const handleImport = (raw: any) => {
     if (!currentUser?.id) {
       showToast('Usuário não identificado para restauração.', 'error');
@@ -538,6 +542,7 @@ function AppLayout() {
                   onImport={handleImport} 
                   onExport={handleExport}
                   onUpdateProfile={updateProfile}
+                  onUpdateBalance={updateBalance}
                 />
               } />
             </Routes>

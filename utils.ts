@@ -19,22 +19,54 @@ export const INITIAL_DATA: AppData = {
   family: 'Família Feliz',
   goals: [],
   activityLog: [],
+  // Sem transações ainda: não há "primeiro lançamento", então usamos hoje como referência.
+  initialBalance: 0,
+  initialBalanceDate: new Date().toISOString().split('T')[0],
 };
 
 const STORAGE_KEY = 'casa_finance_pro_v1';
 
 export const migrateData = (raw: any): AppData => {
-  return {
-    ...INITIAL_DATA,
-    ...raw,
-    transactions: (raw.transactions || []).map((t: any) => ({
+  const migratedTransactions = (raw.transactions || []).map((t: any) => {
+    let defaultStatus = 'REALIZADO';
+    if (!t.status) {
+      const today = new Date().toISOString().split('T')[0];
+      if (t.date > today) {
+        defaultStatus = 'PLANEJADO';
+      }
+    }
+    return {
       ...t,
       id: String(t.id),
       category: String(t.category),
       supplierId: t.supplierId ? String(t.supplierId) : undefined,
+      status: t.status || defaultStatus,
       notes: t.notes || undefined,
       attachments: t.attachments || [],
-    })),
+    };
+  });
+
+  // Retrocompatibilidade do Saldo Inicial de Referência:
+  // - initialBalance: se ausente no backup/estado antigo, assume 0 (comportamento anterior).
+  // - initialBalanceDate: se ausente, assume a data do primeiro lançamento já existente.
+  //   Se não houver nenhum lançamento, usa a data de hoje.
+  const firstTransactionDate = migratedTransactions
+    .map((t: any) => t.date)
+    .filter(Boolean)
+    .sort()[0];
+
+  const initialBalance = typeof raw.initialBalance === 'number' && !isNaN(raw.initialBalance)
+    ? raw.initialBalance
+    : 0;
+
+  const initialBalanceDate = typeof raw.initialBalanceDate === 'string' && raw.initialBalanceDate
+    ? raw.initialBalanceDate
+    : (firstTransactionDate || new Date().toISOString().split('T')[0]);
+
+  return {
+    ...INITIAL_DATA,
+    ...raw,
+    transactions: migratedTransactions,
     categories: (raw.categories || []).map((c: any) => ({
       ...c,
       id: String(c.id),
@@ -53,6 +85,8 @@ export const migrateData = (raw: any): AppData => {
     activityLog: raw.activityLog || [],
     userProfile: raw.userProfile || INITIAL_DATA.userProfile,
     family: raw.family || INITIAL_DATA.family,
+    initialBalance,
+    initialBalanceDate,
   };
 };
 

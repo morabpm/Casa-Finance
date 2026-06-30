@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Download, Upload, Save, FileJson, User, Database, Check, FileText, History, Plus, Edit2, Trash2 } from 'lucide-react';
+import { Download, Upload, Save, FileJson, User, Database, Check, FileText, History, Plus, Edit2, Trash2, Wallet, AlertTriangle } from 'lucide-react';
 import { AppData, UserProfile } from '../types';
 import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
 import { Logo } from './Logo';
 import { LocalUser } from '../auth';
+import { formatCurrency, formatDate } from '../utils';
 
 interface SettingsProps {
   data: AppData;
@@ -12,6 +13,7 @@ interface SettingsProps {
   onImport: (raw: any) => void;
   onExport: () => void;
   onUpdateProfile: (profile: UserProfile) => void;
+  onUpdateBalance: (initialBalance: number, initialBalanceDate: string) => void;
 }
 
 export const Settings: React.FC<SettingsProps> = ({ 
@@ -19,15 +21,24 @@ export const Settings: React.FC<SettingsProps> = ({
   currentUser, 
   onImport, 
   onExport, 
-  onUpdateProfile 
+  onUpdateProfile,
+  onUpdateBalance
 }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'data' | 'history'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'balance' | 'data' | 'history'>('profile');
   const [profileForm, setProfileForm] = useState<UserProfile>(data.userProfile || {
     name: '', email: '', role: '', companyName: ''
   });
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
   const [profileError, setProfileError] = useState<string | null>(null);
   const [historyPage, setHistoryPage] = useState(0);
+
+  // Saldo Inicial/Atual de Referência
+  const [balanceForm, setBalanceForm] = useState({
+    initialBalance: String(data.initialBalance ?? 0),
+    initialBalanceDate: data.initialBalanceDate || new Date().toISOString().split('T')[0],
+  });
+  const [balanceError, setBalanceError] = useState<string | null>(null);
+  const [balanceSaveStatus, setBalanceSaveStatus] = useState<'idle' | 'saved'>('idle');
   
   const { confirm } = useConfirm();
   const { showToast } = useToast();
@@ -115,6 +126,36 @@ export const Settings: React.FC<SettingsProps> = ({
     setTimeout(() => setSaveStatus('idle'), 3000);
   };
 
+  const handleBalanceSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsedValue = Number(balanceForm.initialBalance.replace(',', '.'));
+
+    if (isNaN(parsedValue)) {
+      setBalanceError('Informe um valor numérico válido para o saldo.');
+      return;
+    }
+    if (!balanceForm.initialBalanceDate) {
+      setBalanceError('Selecione a data de referência do saldo.');
+      return;
+    }
+
+    setBalanceError(null);
+
+    confirm({
+      title: "Atualizar Saldo de Referência",
+      message: `O "Caixa Disponível" passará a ser calculado a partir de ${formatDate(balanceForm.initialBalanceDate)} com saldo inicial de ${formatCurrency(parsedValue)}, somando apenas as movimentações realizadas a partir dessa data. Confirmar?`,
+      confirmLabel: "Confirmar",
+      confirmClassName: "bg-brand-600 hover:bg-brand-700 text-white font-bold",
+      type: "warning",
+      onConfirm: () => {
+        onUpdateBalance(parsedValue, balanceForm.initialBalanceDate);
+        setBalanceSaveStatus('saved');
+        showToast('Saldo de referência atualizado!', 'success');
+        setTimeout(() => setBalanceSaveStatus('idle'), 3000);
+      }
+    });
+  };
+
   const handleClearHistory = () => {
     confirm({
       message: "Tem certeza que deseja apagar todo o histórico de atividades?",
@@ -149,6 +190,12 @@ export const Settings: React.FC<SettingsProps> = ({
               className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'profile' ? 'bg-white dark:bg-gray-600 shadow-sm text-brand-600 dark:text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}
             >
               <User size={16} /> Perfil
+            </button>
+            <button 
+              onClick={() => setActiveTab('balance')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'balance' ? 'bg-white dark:bg-gray-600 shadow-sm text-brand-600 dark:text-brand-400' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}
+            >
+              <Wallet size={16} /> Saldo Inicial
             </button>
             <button 
               onClick={() => setActiveTab('data')}
@@ -256,6 +303,87 @@ export const Settings: React.FC<SettingsProps> = ({
                 <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mt-1">{profileForm.name || 'Usuário'}</p>
                 <p className="text-xs text-gray-500 mt-0.5">{profileForm.companyName || 'Pro Plan'}</p>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'balance' && (
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 animate-in slide-in-from-left-4 duration-300 space-y-6">
+          <div className="border-b border-gray-100 dark:border-gray-700 pb-5">
+            <h4 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Saldo Inicial/Atual de Referência</h4>
+            <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-xl border border-blue-100 dark:border-blue-900/40">
+              <AlertTriangle size={18} className="text-blue-500 mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                O "Caixa Disponível" do Dashboard não soma mais todo o histórico desde o início do sistema.
+                Em vez disso, ele parte do saldo real que você informar abaixo, na data escolhida, e soma
+                apenas os lançamentos com status <strong>Realizado</strong> a partir dessa data até hoje.
+                Lançamentos <strong>Planejados</strong> ou com data futura nunca entram nessa conta.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
+            <form onSubmit={handleBalanceSubmit} className="space-y-4 md:col-span-2">
+              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Definir Saldo de Referência</h4>
+              {balanceError && (
+                <div className="p-3 bg-red-100 text-red-700 rounded-md text-sm">
+                  {balanceError}
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Saldo Real na Data (R$)</label>
+                  <input 
+                    type="text"
+                    inputMode="decimal"
+                    required
+                    placeholder="Ex: 1500.00"
+                    className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2 text-sm dark:text-white focus:ring-1 focus:ring-brand-500 outline-none"
+                    value={balanceForm.initialBalance}
+                    onChange={e => {
+                      setBalanceForm({ ...balanceForm, initialBalance: e.target.value });
+                      if (balanceError) setBalanceError(null);
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Data de Referência</label>
+                  <input 
+                    type="date"
+                    required
+                    className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2 text-sm dark:text-white focus:ring-1 focus:ring-brand-500 outline-none"
+                    value={balanceForm.initialBalanceDate}
+                    onChange={e => {
+                      setBalanceForm({ ...balanceForm, initialBalanceDate: e.target.value });
+                      if (balanceError) setBalanceError(null);
+                    }}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Dica: use o saldo exato do extrato bancário no dia escolhido. A partir dessa data, lance
+                tudo normalmente no sistema com status Realizado para manter o "Caixa Disponível" correto.
+              </p>
+              <div className="pt-2">
+                <button 
+                  type="submit" 
+                  className={`flex items-center gap-2 px-6 py-2 rounded-md text-white font-medium transition-colors ${balanceSaveStatus === 'saved' ? 'bg-green-600' : 'bg-brand-600 hover:bg-brand-700'}`}
+                >
+                  {balanceSaveStatus === 'saved' ? <><Check size={18} /> Salvo!</> : <><Save size={18} /> Salvar Saldo de Referência</>}
+                </button>
+              </div>
+            </form>
+
+            <div className="flex flex-col items-center justify-center p-6 bg-slate-50 dark:bg-slate-900/30 rounded-xl border border-gray-100 dark:border-gray-700/50 text-center">
+              <Wallet size={32} className="text-brand-500 mb-3" />
+              <p className="text-xs text-gray-400 dark:text-gray-500 font-mono">Referência Atual:</p>
+              <p className="text-lg font-bold text-gray-800 dark:text-white mt-1">
+                {formatCurrency(data.initialBalance || 0)}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                em {data.initialBalanceDate ? formatDate(data.initialBalanceDate) : '—'}
+              </p>
             </div>
           </div>
         </div>
