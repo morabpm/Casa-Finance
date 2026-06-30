@@ -67,40 +67,6 @@ export const saveUserData = (userId: string, data: AppData): void => {
   } catch {}
 };
 
-// Exportar dados (backup) — só do usuário logado
-export const exportUserData = (userId: string): AppData | null => {
-  try {
-    const raw = localStorage.getItem(dataKey(userId));
-    return raw ? migrateData(JSON.parse(raw)) : null;
-  } catch { return null; }
-};
-
-// Importar dados (restore) — só afeta o usuário logado
-export const importUserData = (userId: string, raw: any): void => {
-  const migrated = migrateData(raw);
-  
-  // Força uma transação visível caso venha vazio
-  if (!migrated.transactions || migrated.transactions.length === 0) {
-    migrated.transactions = [
-      {
-        id: "snapshot-test",
-        description: "FORCADO - BACKUP CONECTADO",
-        amount: 5000,
-        type: "RECEITA",
-        date: new Date().toISOString().split('T')[0],
-        categoryId: "1"
-      }
-    ];
-  }
-
-  // Salva de todas as formas possíveis para garantir que o app ache
-  localStorage.setItem('casa_finance_master_data', JSON.stringify(migrated));
-  localStorage.setItem(`casa_finance_data_${userId}`, JSON.stringify(migrated));
-  if (userId) {
-    localStorage.setItem('casa_finance_data', JSON.stringify(migrated));
-  }
-};
-
 // Retorna os dois usuários para exibir na tela de login
 export const getPresetUsers = (): LocalUser[] =>
   PRESET_USERS.map(u => ({ id: u.id, name: u.name, username: u.username, color: u.color }));

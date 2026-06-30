@@ -41,8 +41,6 @@ import {
   getCurrentUser,
   loadUserData,
   saveUserData,
-  exportUserData,
-  importUserData,
 } from './auth';
 import { LoginScreen } from './components/auth/LoginScreen';
 
@@ -285,8 +283,9 @@ function AppLayout() {
   };
 
   const handleExport = () => {
-    const exportData = exportUserData(currentUser.id);
-    if (!exportData) return;
+    if (!currentUser) return;
+    saveUserData(currentUser.id, data); // garante persistência antes de gerar o arquivo
+    const exportData = data;
     const blob = new Blob(
       [JSON.stringify({ ...exportData, exportedAt: new Date().toISOString(), user: currentUser.name }, null, 2)],
       { type: 'application/json' }
