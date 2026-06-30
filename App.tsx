@@ -60,6 +60,8 @@ function AppLayout() {
     return loadUserData(currentUser ? currentUser.id : 'default');
   });
 
+  const [importTrigger, setImportTrigger] = useState(0);
+
   const [isDark, setIsDark] = useState(() => {
     const saved = localStorage.getItem('casa_finance_theme');
     if (saved) return saved === 'dark';
@@ -73,8 +75,10 @@ function AppLayout() {
     year: new Date().getFullYear(),
   });
 
+  // Carrega dados do usuário apenas na troca de usuário (login/logout)
+  // NÃO relê localStorage após restore — o handleImport já faz setData diretamente
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser?.id) {
       setData(loadUserData(currentUser.id));
     }
   }, [currentUser?.id]);
@@ -265,10 +269,19 @@ function AppLayout() {
   const updateProfile = (profile: UserProfile) => setData(prev => ({ ...prev, userProfile: profile }));
 
   const handleImport = (raw: any) => {
-    const migrated = migrateData(raw);
-    saveUserData(currentUser.id, migrated);
-    setData(migrated);
-    showToast('Backup restaurado com sucesso!', 'success');
+    if (!currentUser?.id) {
+      showToast('Usuário não identificado para restauração.', 'error');
+      return;
+    }
+    try {
+      const migrated = migrateData(raw);
+      saveUserData(currentUser.id, migrated);
+      setData(migrated);
+      showToast('Backup restaurado com sucesso!', 'success');
+    } catch (error) {
+      console.error("Erro no processo de importação:", error);
+      showToast('Falha ao processar o arquivo de backup.', 'error');
+    }
   };
 
   const handleExport = () => {
@@ -460,7 +473,7 @@ function AppLayout() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-          <div className="max-w-7xl mx-auto">
+          <div className="max-w-7xl mx-auto" key={importTrigger}>
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={

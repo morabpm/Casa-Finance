@@ -3,7 +3,6 @@ import { Download, Upload, Save, FileJson, User, Database, Check, FileText, Hist
 import { AppData, UserProfile } from '../types';
 import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
-import { migrateData } from '../utils';
 import { Logo } from './Logo';
 import { LocalUser } from '../auth';
 
@@ -57,33 +56,49 @@ export const Settings: React.FC<SettingsProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileReader = new FileReader();
-    if (e.target.files && e.target.files[0]) {
-      fileReader.readAsText(e.target.files[0], "UTF-8");
-      fileReader.onload = (event) => {
-        try {
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const fileContent = await new Promise<string>((resolve, reject) => {
+        const fileReader = new FileReader();
+        fileReader.onload = (event) => {
           if (event.target?.result) {
-            const parsed = JSON.parse(event.target.result as string);
-            confirm({
-              title: "Restaurar Backup",
-              message: `Isso substituirá TODOS os dados atuais do usuário "${currentUser.name}". Tem certeza que deseja continuar com a restauração?`,
-              confirmLabel: "Restaurar Dados",
-              confirmClassName: "bg-brand-600 hover:bg-brand-700 text-white font-bold",
-              type: "warning",
-              onConfirm: () => {
-                const migrated = migrateData(parsed);
-                onImport(migrated);
-                if (migrated.userProfile) {
-                  setProfileForm(migrated.userProfile);
-                }
-              }
-            });
+            resolve(event.target.result as string);
+          } else {
+            reject(new Error("Falha ao ler o arquivo."));
           }
-        } catch (err) {
-          showToast("Erro ao ler o arquivo. O JSON pode estar corrompido.", "error");
+        };
+        fileReader.onerror = () => reject(new Error("Erro no leitor de arquivos."));
+        fileReader.readAsText(file, "UTF-8");
+      });
+
+      const parsed = JSON.parse(fileContent);
+
+      // Schema Check Básico
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error("Formato de arquivo inválido. É esperado um objeto JSON válido.");
+      }
+
+      confirm({
+        title: "Restaurar Backup",
+        message: `Isso substituirá TODOS os dados atuais do usuário "${currentUser.name}". Tem certeza que deseja continuar com a restauração?`,
+        confirmLabel: "Restaurar Dados",
+        confirmClassName: "bg-brand-600 hover:bg-brand-700 text-white font-bold",
+        type: "warning",
+        onConfirm: () => {
+          onImport(parsed);
+          if (parsed.userProfile) {
+            setProfileForm(parsed.userProfile);
+          }
         }
-      };
+      });
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Erro ao processar o arquivo de backup.", "error");
+    } finally {
+      // Forçar a substituição da referência, permitindo importar o mesmo arquivo consecutivamente
+      e.target.value = '';
     }
   };
 

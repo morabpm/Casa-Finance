@@ -84,6 +84,12 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transactions, filterMonth, filterYear, searchTerm, filterType, filterStatus, filterCategory]);
 
+  // Get unique descriptions for autocomplete
+  const uniqueDescriptions = useMemo(() => {
+    const descriptions = transactions.map(t => t.description.trim()).filter(Boolean);
+    return Array.from(new Set(descriptions)).sort();
+  }, [transactions]);
+
   // Totals
   const { totalIncome, totalExpense, balance } = useMemo(() => {
     return filteredTransactions.reduce(
@@ -598,10 +604,18 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
             <input 
               required
               type="text" 
+              list="description-options"
               className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2 text-sm dark:text-white"
               value={formData.description}
               onChange={e => setFormData({...formData, description: e.target.value})}
+              autoComplete="off"
+              placeholder="Digite ou selecione uma descrição..."
             />
+            <datalist id="description-options">
+              {uniqueDescriptions.map((desc, idx) => (
+                <option key={idx} value={desc} />
+              ))}
+            </datalist>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
