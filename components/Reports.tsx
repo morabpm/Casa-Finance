@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Download, BarChart2, PieChart, Calendar, Printer } from 'lucide-react';
 import { AppData } from '../types';
-import { calculateTotals, getMonthName, formatCurrency } from '../utils';
+import { calculateTotals, getMonthName, formatCurrency, getLatestPeriodWithData } from '../utils';
 
 interface ReportsProps {
   data: AppData;
@@ -14,9 +14,12 @@ export const Reports: React.FC<ReportsProps> = ({ data }) => {
   
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth();
-  
-  const [filterYear, setFilterYear] = useState(currentYear);
-  const [filterMonth, setFilterMonth] = useState(currentMonth);
+
+  // Abre nos relatórios do mês/ano mais recente com lançamentos, não no mês real de
+  // hoje. Sem isso, as abas "Categorias" e "Fixos" (que dependem de mês+ano) ficavam
+  // vazias logo após restaurar um backup antigo, dando a impressão de dados incompletos.
+  const [filterYear, setFilterYear] = useState(() => getLatestPeriodWithData(data.transactions)?.year ?? currentYear);
+  const [filterMonth, setFilterMonth] = useState(() => getLatestPeriodWithData(data.transactions)?.month ?? currentMonth);
 
   // Tab 1: Fluxo de Caixa
   const cashflowRows = useMemo(() => {

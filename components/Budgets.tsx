@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, Trash2, AlertCircle, Edit2, Copy } from 'lucide-react';
 import { Budget, Category, Transaction } from '../types';
-import { formatCurrency, getMonthName } from '../utils';
+import { formatCurrency, getMonthName, getLatestPeriodWithData } from '../utils';
 import { Modal } from './ui/Modal';
 import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
@@ -19,9 +19,21 @@ export const Budgets: React.FC<BudgetsProps> = ({ budgets, categories, transacti
   const [isModalOpen, setIsModalOpen] = useState(false);
   const currentMonth = new Date().getMonth();
   const currentYear = new Date().getFullYear();
-  
-  const [filterMonth, setFilterMonth] = useState(currentMonth);
-  const [filterYear, setFilterYear] = useState(currentYear);
+
+  // Abre no mês/ano mais recente que já tem orçamento cadastrado; se não houver
+  // nenhum orçamento ainda, usa o mês mais recente com lançamentos; só cai no mês
+  // real de hoje se não houver dado nenhum. Evita a tela abrir "vazia" só porque o
+  // mês de hoje ainda não tem orçamento configurado, logo após restaurar um backup.
+  const getDefaultPeriod = () => {
+    if (budgets.length > 0) {
+      const sorted = [...budgets].sort((a, b) => (b.year - a.year) || (b.month - a.month));
+      return { month: sorted[0].month, year: sorted[0].year };
+    }
+    return getLatestPeriodWithData(transactions) ?? { month: currentMonth, year: currentYear };
+  };
+
+  const [filterMonth, setFilterMonth] = useState(() => getDefaultPeriod().month);
+  const [filterYear, setFilterYear] = useState(() => getDefaultPeriod().year);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const { confirm } = useConfirm();

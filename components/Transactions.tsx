@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Search, Paperclip, X, FileText, Download, Copy, Repeat, ChevronLeft, ChevronRight, LayoutList, LayoutGrid, Truck, StickyNote, FileSpreadsheet } from 'lucide-react';
 import { Transaction, Category, TransactionType, TransactionStatus, Attachment, Supplier } from '../types';
-import { formatDate, formatCurrency, getMonthName } from '../utils';
+import { formatDate, formatCurrency, getMonthName, getLatestPeriodWithData } from '../utils';
 import { Modal } from './ui/Modal';
 import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
@@ -22,8 +22,11 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<TransactionType | ''>('');
-  const [filterMonth, setFilterMonth] = useState(currentMonth);
-  const [filterYear, setFilterYear] = useState(currentYear);
+  // Abre direto no mês mais recente que tem lançamentos, em vez do mês real de hoje.
+  // Isso evita a tela abrir "vazia" logo após restaurar um backup antigo (o caso mais
+  // comum é o mês/ano de hoje ainda não ter nenhum lançamento).
+  const [filterMonth, setFilterMonth] = useState(() => getLatestPeriodWithData(transactions)?.month ?? currentMonth);
+  const [filterYear, setFilterYear] = useState(() => getLatestPeriodWithData(transactions)?.year ?? currentYear);
   const [filterStatus, setFilterStatus] = useState<TransactionStatus | 'TODOS'>('TODOS');
   const [filterCategory, setFilterCategory] = useState<string>('');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
@@ -67,6 +70,18 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
 
   const handleYearChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setFilterYear(parseInt(e.target.value));
+    setCurrentPage(1);
+  };
+
+  // Total geral (sem filtro) e mês/ano mais recente com lançamentos — usados para
+  // mostrar um aviso útil quando o mês/ano selecionado está vazio mas existem
+  // lançamentos em outro período (ex.: logo após restaurar um backup antigo).
+  const totalTransactionsCount = transactions.length;
+  const latestPeriodWithData = useMemo(() => getLatestPeriodWithData(transactions), [transactions]);
+  const jumpToLatestPeriod = () => {
+    if (!latestPeriodWithData) return;
+    setFilterMonth(latestPeriodWithData.month);
+    setFilterYear(latestPeriodWithData.year);
     setCurrentPage(1);
   };
 
@@ -409,8 +424,22 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {paginatedTransactions.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
-                      Nenhum lançamento encontrado.
+                    <td colSpan={7} className="px-6 py-10 text-center text-gray-500">
+                      <p>Nenhum lançamento em {getMonthName(filterMonth)} de {filterYear}.</p>
+                      {totalTransactionsCount > 0 && latestPeriodWithData && (
+                        <p className="mt-2 text-sm">
+                          Você tem {totalTransactionsCount} lançamento(s) no total.{' '}
+                          {(latestPeriodWithData.month !== filterMonth || latestPeriodWithData.year !== filterYear) && (
+                            <button
+                              type="button"
+                              onClick={jumpToLatestPeriod}
+                              className="text-brand-600 dark:text-brand-400 font-semibold underline hover:no-underline"
+                            >
+                              Ver {getMonthName(latestPeriodWithData.month)} de {latestPeriodWithData.year} (mês mais recente com dados)
+                            </button>
+                          )}
+                        </p>
+                      )}
                     </td>
                   </tr>
                 ) : (
@@ -495,8 +524,22 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
         ) : (
           <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 dark:bg-gray-800/50">
             {paginatedTransactions.length === 0 ? (
-              <div className="col-span-1 sm:col-span-2 py-8 text-center text-gray-500">
-                Nenhum lançamento encontrado.
+              <div className="col-span-1 sm:col-span-2 py-10 text-center text-gray-500">
+                <p>Nenhum lançamento em {getMonthName(filterMonth)} de {filterYear}.</p>
+                {totalTransactionsCount > 0 && latestPeriodWithData && (
+                  <p className="mt-2 text-sm">
+                    Você tem {totalTransactionsCount} lançamento(s) no total.{' '}
+                    {(latestPeriodWithData.month !== filterMonth || latestPeriodWithData.year !== filterYear) && (
+                      <button
+                        type="button"
+                        onClick={jumpToLatestPeriod}
+                        className="text-brand-600 dark:text-brand-400 font-semibold underline hover:no-underline"
+                      >
+                        Ver {getMonthName(latestPeriodWithData.month)} de {latestPeriodWithData.year} (mês mais recente com dados)
+                      </button>
+                    )}
+                  </p>
+                )}
               </div>
             ) : (
               paginatedTransactions.map(t => {

@@ -1,5 +1,6 @@
 import { AppData } from './types';
 import { INITIAL_DATA, migrateData } from './utils';
+import { idbGet, idbSet, requestPersistentStorage } from './db';
 
 export interface LocalUser {
   id: string;
@@ -32,6 +33,9 @@ export const loginUser = (
   }
   const user: LocalUser = { id: found.id, name: found.name, username: found.username, color: found.color };
   sessionStorage.setItem(SESSION_KEY, found.id);
+  // Pede armazenamento persistente ao navegador (evita que o IndexedDB seja limpo
+  // automaticamente sob pressão de espaço). Não bloqueia o login se não for suportado.
+  requestPersistentStorage();
   return { success: true, user };
 };
 
@@ -51,20 +55,53 @@ export const getCurrentUser = (): LocalUser | null => {
   } catch { return null; }
 };
 
-// Carregar dados do usuário — sempre passa por migrateData para compatibilidade
-export const loadUserData = (userId: string): AppData => {
+// Carregar dados do usuário — sempre passa por migrateData para compatibilidade.
+// Armazenamos em IndexedDB (muito mais espaço que localStorage). Se o navegador
+// ainda tiver dados de uma versão antiga do app (salvos em localStorage), eles são
+// migrados automaticamente para o IndexedDB na primeira vez que o usuário loga,
+// e o localStorage é limpo em seguida — assim nada se perde na transição.
+export const loadUserData = async (userId: string): Promise<AppData> => {
   try {
-    const raw = localStorage.getItem(dataKey(userId));
-    if (raw) return migrateData(JSON.parse(raw));
+    const fromDB = await idbGet<any>(dataKey(userId));
+    if (fromDB) return migrateData(fromDB);
+
+    const legacyRaw = localStorage.getItem(dataKey(userId));
+    if (legacyRaw) {
+      const migrated = migrateData(JSON.parse(legacyRaw));
+      try {
+        await idbSet(dataKey(userId), migrated);
+        localStorage.removeItem(dataKey(userId));
+      } catch {
+        // Se por algum motivo a migração para o IndexedDB falhar agora, não há problema:
+        // os dados antigos continuam intactos no localStorage e serão migrados na próxima tentativa.
+      }
+      return migrated;
+    }
+
     return { ...INITIAL_DATA };
-  } catch { return { ...INITIAL_DATA }; }
+  } catch (err) {
+    console.error('Erro ao carregar dados do usuário:', err);
+    return { ...INITIAL_DATA };
+  }
 };
 
-// Salvar dados do usuário
-export const saveUserData = (userId: string, data: AppData): void => {
+// Salvar dados do usuário.
+// Retorna { success, error } em vez de só um booleano, para que a tela consiga
+// mostrar o motivo real da falha (ex.: "sem espaço em disco") em vez de uma
+// mensagem genérica — isso era o que fazia parecer que o backup "sumia" sem
+// nenhuma pista de por quê.
+export const saveUserData = async (
+  userId: string,
+  data: AppData
+): Promise<{ success: boolean; error?: string }> => {
   try {
-    localStorage.setItem(dataKey(userId), JSON.stringify(data));
-  } catch {}
+    await idbSet(dataKey(userId), data);
+    return { success: true };
+  } catch (err) {
+    console.error('Erro ao salvar dados do usuário:', err);
+    const message = err instanceof Error ? err.message : 'Erro desconhecido ao salvar.';
+    return { success: false, error: message };
+  }
 };
 
 // Retorna os dois usuários para exibir na tela de login

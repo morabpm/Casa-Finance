@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 
 import { AppData, Transaction, Category, Budget, DateFilter, Supplier, UserProfile, Goal } from './types';
-import { INITIAL_DATA, createLog, formatCurrency, migrateData } from './utils';
+import { INITIAL_DATA, createLog, formatCurrency, migrateData, getLatestPeriodWithData } from './utils';
 
 // Views
 import { Dashboard } from './components/Dashboard';
@@ -54,9 +54,24 @@ function AppLayout() {
 
   const [currentUser, setCurrentUser] = useState<LocalUser | null>(() => getCurrentUser());
 
-  const [data, setData] = useState<AppData>(() => {
-    return loadUserData(currentUser ? currentUser.id : 'default');
-  });
+  // Carregar dados agora é assíncrono (IndexedDB). Começamos com INITIAL_DATA como placeholder
+  // e o efeito abaixo troca pelos dados reais assim que terminar de carregar.
+  const [data, setData] = useState<AppData>(INITIAL_DATA);
+
+  // Trava de segurança: enquanto os dados reais ainda não terminaram de carregar do IndexedDB,
+  // NÃO deixamos o efeito de salvamento rodar — senão ele salvaria o INITIAL_DATA (vazio) por cima
+  // dos dados reais do usuário, apagando tudo. Isso é o que causava perda de dados em recargas rápidas.
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+
+  // BUG REAL ENCONTRADO: como este app é usado por 2 pessoas da família no mesmo navegador
+  // (login "Sucesso" e "Casa"), ao trocar de usuário sem recarregar a página existia uma
+  // condição de corrida: `isDataLoaded` ficava com o valor "true" (do usuário anterior) por
+  // uma renderização inteira antes do efeito de carregamento zerá-lo, e nesse intervalo o
+  // efeito de salvamento automático rodava com os DADOS ANTIGOS do usuário anterior e o ID
+  // do usuário NOVO — sobrescrevendo o backup do usuário que acabou de logar com os dados de
+  // quem usou o app antes dele. Um `ref` resolve isso porque é atualizado de forma síncrona,
+  // sem esperar a próxima renderização (diferente de `useState`).
+  const loadedUserIdRef = useRef<string | null>(null);
 
   const [importTrigger, setImportTrigger] = useState(0);
 
@@ -73,19 +88,72 @@ function AppLayout() {
     year: new Date().getFullYear(),
   });
 
-  // Carrega dados do usuário apenas na troca de usuário (login/logout)
-  // NÃO relê localStorage após restore — o handleImport já faz setData diretamente
-  useEffect(() => {
-    if (currentUser?.id) {
-      setData(loadUserData(currentUser.id));
+  // Se o mês/ano real de hoje não tiver nenhum lançamento mas existirem lançamentos
+  // em outro período, pula o filtro do Dashboard para o mês mais recente com dados —
+  // e avisa por quê. Sem isso, restaurar um backup antigo (ou só virar o mês) faz o
+  // Dashboard mostrar R$ 0,00 mesmo com centenas de lançamentos, parecendo que os
+  // dados sumiram quando na verdade só estão "escondidos" pelo filtro do mês atual.
+  const jumpToLatestPeriodIfCurrentIsEmpty = (loadedData: AppData, opts?: { silent?: boolean }) => {
+    const today = new Date();
+    const hasDataInRealCurrentMonth = loadedData.transactions.some(t => {
+      const d = new Date(t.date + 'T12:00:00');
+      return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+    });
+    if (hasDataInRealCurrentMonth) return;
+
+    const latest = getLatestPeriodWithData(loadedData.transactions);
+    if (!latest) return;
+
+    setFilter(latest);
+    if (!opts?.silent) {
+      showToast(
+        `Não há lançamentos em ${today.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} ainda — mostrando ${new Date(latest.year, latest.month).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}, o mês mais recente com dados.`,
+        'info'
+      );
     }
+  };
+
+  // Carrega dados do usuário apenas na troca de usuário (login/logout)
+  // NÃO relê o armazenamento após restore — o handleImport já faz setData diretamente
+  useEffect(() => {
+    let cancelled = false;
+    if (currentUser?.id) {
+      // Invalida imediatamente (síncrono) qualquer autorização de salvar que o efeito
+      // abaixo possa ter para o usuário anterior. Isso acontece ANTES do efeito de
+      // salvamento rodar nesta mesma passagem, então ele nunca salva dados errados.
+      loadedUserIdRef.current = null;
+      setIsDataLoaded(false);
+      loadUserData(currentUser.id).then(loaded => {
+        if (!cancelled) {
+          setData(loaded);
+          jumpToLatestPeriodIfCurrentIsEmpty(loaded);
+          loadedUserIdRef.current = currentUser.id;
+          setIsDataLoaded(true);
+        }
+      });
+    } else {
+      loadedUserIdRef.current = null;
+    }
+    return () => { cancelled = true; };
   }, [currentUser?.id]);
 
   useEffect(() => {
-    if (currentUser) {
-      saveUserData(currentUser.id, data);
+    // Só salva se os dados em `data` realmente pertencerem ao `currentUser` atual —
+    // ou seja, o carregamento terminou (isDataLoaded) E foi para ESTE usuário
+    // (loadedUserIdRef.current === currentUser.id). Sem essa segunda checagem, uma
+    // troca de usuário no mesmo navegador podia sobrescrever o backup de um com os
+    // dados (ainda em memória) do outro.
+    if (currentUser && isDataLoaded && loadedUserIdRef.current === currentUser.id) {
+      saveUserData(currentUser.id, data).then(({ success, error }) => {
+        if (!success) {
+          showToast(
+            `Falha ao salvar os dados${error ? `: ${error}` : ''}. Verifique o espaço de armazenamento do navegador.`,
+            'error'
+          );
+        }
+      });
     }
-  }, [data, currentUser?.id]);
+  }, [data, currentUser?.id, isDataLoaded]);
 
   useEffect(() => {
     if (isDark) {
@@ -110,6 +178,19 @@ function AppLayout() {
 
   if (!currentUser) {
     return <LoginScreen onLogin={(user) => setCurrentUser(user)} />;
+  }
+
+  // Evita mostrar a tela zerada (INITIAL_DATA) por uma fração de segundo enquanto
+  // os dados reais ainda estão sendo lidos do IndexedDB.
+  if (!isDataLoaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-gray-500 dark:text-gray-400">Carregando seus dados...</p>
+        </div>
+      </div>
+    );
   }
 
   const toggleTheme = () => {
@@ -270,25 +351,58 @@ function AppLayout() {
     setData(prev => ({ ...prev, initialBalance, initialBalanceDate }));
   };
 
-  const handleImport = (raw: any) => {
+  const handleImport = async (raw: any) => {
     if (!currentUser?.id) {
       showToast('Usuário não identificado para restauração.', 'error');
       return;
     }
     try {
       const migrated = migrateData(raw);
-      saveUserData(currentUser.id, migrated);
+      const { success, error } = await saveUserData(currentUser.id, migrated);
+      // Garante que o efeito de salvamento automático (que vai disparar de novo
+      // por causa do setData abaixo) continue autorizado a salvar para este usuário.
+      loadedUserIdRef.current = currentUser.id;
       setData(migrated);
-      showToast('Backup restaurado com sucesso!', 'success');
+      // O backup restaurado costuma não ter lançamentos no mês/ano real de hoje
+      // (é um histórico). Sem isto, o usuário restaura e o Dashboard continua
+      // mostrando R$ 0,00 no mês atual, parecendo que "não trouxe nada".
+      jumpToLatestPeriodIfCurrentIsEmpty(migrated, { silent: true });
+      // BUG REAL ENCONTRADO: existia uma variável `importTrigger` usada como `key`
+      // nas rotas (Lançamentos, Orçamentos, Relatórios, Categorias, Fornecedores...)
+      // exatamente para forçar essas telas a recomeçar do zero após um restore —
+      // mas ela nunca era incrementada em lugar nenhum do código. Resultado: se o
+      // usuário já tivesse aberto uma dessas telas antes de restaurar, ela continuava
+      // com os filtros/estado de ANTES do restore (ex.: preso no mês de hoje, sem
+      // lançamentos), dando a impressão de que os dados vieram incompletos — quando na
+      // verdade só a tela não tinha sido atualizada. Isto força todas elas a remontar
+      // do zero, já lendo os dados novos desde o primeiro render.
+      setImportTrigger(prev => prev + 1);
+      if (success) {
+        showToast(
+          `Backup restaurado com sucesso! ${migrated.transactions.length} lançamento(s), ${migrated.categories.length} categoria(s), ${migrated.suppliers.length} fornecedor(es) importados.`,
+          'success'
+        );
+      } else {
+        showToast(
+          `O backup foi carregado, mas falhou ao salvar no armazenamento local${error ? `: ${error}` : ''}. Exporte novamente para não perder o progresso.`,
+          'error'
+        );
+      }
     } catch (error) {
       console.error("Erro no processo de importação:", error);
       showToast('Falha ao processar o arquivo de backup.', 'error');
     }
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!currentUser) return;
-    saveUserData(currentUser.id, data); // garante persistência antes de gerar o arquivo
+    const { success, error } = await saveUserData(currentUser.id, data); // garante persistência antes de gerar o arquivo
+    if (!success) {
+      showToast(
+        `Atenção: os dados podem não ter sido salvos localmente antes da exportação${error ? ` (${error})` : ''}. O arquivo gerado ainda reflete o que está na tela.`,
+        'error'
+      );
+    }
     const exportData = data;
     const blob = new Blob(
       [JSON.stringify({ ...exportData, exportedAt: new Date().toISOString(), user: currentUser.name }, null, 2)],

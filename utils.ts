@@ -140,3 +140,21 @@ export const calculateTotals = (transactions: Transaction[], month: number, year
   });
   return { income, expense, balance: income - expense };
 };
+
+// Encontra o mês/ano do lançamento mais recente. Usado para não deixar o app
+// parecer "vazio" quando o mês/ano real de hoje ainda não tem nenhum lançamento
+// (ex.: logo após restaurar um backup antigo, ou virada de mês) — nesse caso as
+// telas que filtram por mês corrente mostram R$ 0,00 mesmo com centenas de
+// lançamentos existentes, o que parece (mas não é) perda de dados.
+export const getLatestPeriodWithData = (transactions: Transaction[]): { month: number; year: number } | null => {
+  if (!transactions || transactions.length === 0) return null;
+  let latest: Date | null = null;
+  for (const t of transactions) {
+    if (!t.date) continue;
+    const d = new Date(t.date + 'T12:00:00');
+    if (isNaN(d.getTime())) continue;
+    if (!latest || d > latest) latest = d;
+  }
+  if (!latest) return null;
+  return { month: latest.getMonth(), year: latest.getFullYear() };
+};
