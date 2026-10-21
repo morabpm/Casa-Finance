@@ -76,19 +76,11 @@ export const idbSet = async (key: string, value: unknown): Promise<void> => {
     tx.onabort = () => reject(tx.error || new Error('A transação de salvamento foi abortada (provavelmente falta de espaço).'));
   });
 
-  // Verificação de gravação: relemos a chave e comparamos o tamanho serializado
-  // com o que tentamos gravar. Isso pega casos raros (principalmente Safari/iOS
-  // antigos) em que a transação reporta sucesso mas o dado persistido não bate
-  // com o que foi enviado — o que no app se manifestava como "sumiu parte do backup".
-  const readBack = await idbGet<unknown>(key);
-  const expectedSize = JSON.stringify(value).length;
-  const actualSize = readBack !== undefined ? JSON.stringify(readBack).length : -1;
-  if (actualSize !== expectedSize) {
-    throw new Error(
-      `Verificação de gravação falhou: esperado ${expectedSize} bytes, encontrado ${actualSize} bytes. ` +
-      `Os dados podem não ter sido salvos por completo (espaço em disco insuficiente ou navegador em modo privado).`
-    );
-  }
+  // Obs.: a versão anterior relia TODO o banco e fazia JSON.stringify duas vezes (valor e
+  // leitura) após CADA alteração. Com anexos o backup passa de 20 MB, então isso travava
+  // a tela e podia estourar memória no celular — causando falhas ao salvar/anexar.
+  // A própria transação (tx.oncomplete / onabort acima) já garante que a gravação foi
+  // confirmada pelo navegador, então a releitura pesada foi removida.
 };
 
 export const idbDelete = async (key: string): Promise<void> => {

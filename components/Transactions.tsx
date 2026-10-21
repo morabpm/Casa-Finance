@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Search, Paperclip, X, FileText, Download, Copy, Repeat, ChevronLeft, ChevronRight, LayoutList, LayoutGrid, Truck, StickyNote, FileSpreadsheet } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Paperclip, X, FileText, Download, Copy, Repeat, ChevronLeft, ChevronRight, LayoutList, LayoutGrid, Truck, StickyNote, FileSpreadsheet, ExternalLink } from 'lucide-react';
 import { Transaction, Category, TransactionType, TransactionStatus, Attachment, Supplier } from '../types';
 import { formatDate, formatCurrency, getMonthName, getLatestPeriodWithData } from '../utils';
 import { Modal } from './ui/Modal';
 import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
 import { ImportSpreadsheet } from './ImportSpreadsheet';
+import { processFiles, downloadAttachment, openAttachment } from '../attachments';
 
 interface TransactionsProps {
   transactions: Transaction[];
@@ -178,6 +179,8 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
           const t: Transaction = {
             ...(baseTransaction as Transaction),
             id: crypto.randomUUID(),
+            // Anexos (base64 pesado) só no 1º lançamento — evita duplicar MBs a cada repetição.
+            attachments: i === 0 ? baseTransaction.attachments : [],
             date: newDate.toISOString().split('T')[0],
             status: i === 0 ? (baseTransaction.status as TransactionStatus) : 'PLANEJADO'
           };
@@ -192,50 +195,39 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
     setIsModalOpen(false);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const files: File[] = Array.from(e.target.files);
-      const MAX_SIZE = 1024 * 1024; // 1MB
+  const [isProcessingFiles, setIsProcessingFiles] = useState(false);
 
-      const validFiles = files.filter(file => {
-        if (file.size > MAX_SIZE) {
-          showToast(`O arquivo "${file.name}" excede o limite de 1MB e será ignorado.`, 'error');
-          return false;
-        }
-        return true;
-      });
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target;
+    const files: File[] = Array.from(input.files || []);
+    // Limpa o input já (permite escolher o mesmo arquivo de novo depois).
+    input.value = '';
+    if (files.length === 0) return;
 
-      if (validFiles.length === 0) return;
-
-      const fileReaders = validFiles.map(file => {
-        return new Promise<Attachment>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            if (event.target?.result) {
-              resolve({
-                id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                name: file.name,
-                type: file.type,
-                size: file.size,
-                url: event.target.result as string,
-                uploadedAt: new Date().toISOString()
-              });
-            }
-          };
-          reader.readAsDataURL(file);
-        });
-      });
-
-      Promise.all(fileReaders).then(newAttachments => {
+    setIsProcessingFiles(true);
+    try {
+      const { attachments: newAttachments, errors } = await processFiles(files);
+      errors.forEach(msg => showToast(msg, 'error'));
+      if (newAttachments.length > 0) {
         setFormData(prev => ({
           ...prev,
           attachments: [...(prev.attachments || []), ...newAttachments]
         }));
-      });
-      
-      // Reset input value to allow selecting the same file again if needed
-      e.target.value = '';
+        showToast(`${newAttachments.length} anexo(s) adicionado(s). Clique em Salvar para confirmar.`, 'success');
+      }
+    } finally {
+      setIsProcessingFiles(false);
     }
+  };
+
+  const handleDownload = (att: Attachment) => {
+    try { downloadAttachment(att); }
+    catch (err) { showToast(err instanceof Error ? err.message : 'Não foi possível baixar o anexo.', 'error'); }
+  };
+
+  const handleOpen = (att: Attachment) => {
+    try { openAttachment(att); }
+    catch (err) { showToast(err instanceof Error ? err.message : 'Não foi possível abrir o anexo.', 'error'); }
   };
 
   const removeAttachment = (id: string) => {
@@ -835,14 +827,22 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
                          </div>
                       </div>
                       <div className="flex items-center gap-1">
-                         <a 
-                           href={att.url} 
-                           download={att.name}
+                         <button
+                           type="button"
+                           onClick={() => handleOpen(att)}
+                           className="p-1.5 text-gray-500 hover:text-brand-600 hover:bg-gray-100 dark:hover:bg-gray-600 rounded transition-colors"
+                           title="Abrir"
+                         >
+                           <ExternalLink size={16} />
+                         </button>
+                         <button
+                           type="button"
+                           onClick={() => handleDownload(att)}
                            className="p-1.5 text-gray-500 hover:text-brand-600 hover:bg-gray-100 dark:hover:bg-gray-600 rounded transition-colors"
                            title="Baixar"
                          >
                            <Download size={16} />
-                         </a>
+                         </button>
                          <button 
                            type="button" 
                            onClick={() => removeAttachment(att.id)} 
@@ -864,8 +864,8 @@ export const Transactions: React.FC<TransactionsProps> = ({ transactions, catego
               <div className="flex">
                 <label className="cursor-pointer bg-white dark:bg-gray-700 border border-dashed border-gray-300 dark:border-gray-600 hover:border-brand-500 dark:hover:border-brand-500 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 px-4 py-3 rounded-md text-sm flex items-center justify-center gap-2 transition-all w-full group">
                   <Paperclip size={18} className="group-hover:text-brand-500" /> 
-                  <span className="group-hover:text-brand-600">Adicionar anexo (Múltiplos)</span>
-                  <input type="file" className="hidden" multiple onChange={handleFileChange} />
+                  <span className="group-hover:text-brand-600">{isProcessingFiles ? 'Processando arquivos...' : 'Adicionar anexo (Múltiplos)'}</span>
+                  <input type="file" className="hidden" multiple accept="image/*,application/pdf,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" disabled={isProcessingFiles} onChange={handleFileChange} />
                 </label>
               </div>
             </div>
